@@ -3,13 +3,18 @@ Server:
   # release / debug / test
   mode: "release"
 
-MySQL:
+Database:
+  # 数据库类型: mysql 或 sqlite (默认: mysql)
+  type: sqlite
+  # MySQL 配置 (当 type 为 mysql 时使用)
   host: w8t-mysql
   port: 3306
-  username: root
-  password: w8t.123
-  database: vingo
+  user: root
+  pass: w8t.123
+  dbName: watchalert
   timeout: 10s
+  # SQLite 配置 (当 type 为 sqlite 时使用)
+  path: data/rcaagent.db
 
 Redis:
   host: w8t-redis
@@ -20,3 +25,20 @@ Redis:
 Jwt:
   # 失效时间
   expire: 18000
+
+mcp:
+  services:
+    prometheus:
+      name: "prometheus"
+      url: "http://localhost:9090"
+      description: "Prometheus 监控工具"
+      timeout: "30s"
+      enabled: true
+
+skill:
+  # skill文件目录，支持绝对路径和相对路径
+  dir: "./agent/skills"
+  # 是否启用skill
+  enabled: true
+  # 默认使用的skill名称（可选）
+  default: "sre-fault-diagnosis-and-rca"

@@ -1,7 +1,8 @@
 package repos
 
 import (
-	"Zeus/internal/models"
+	"RCAgent/internal/models"
+
 	"gorm.io/gorm"
 )
 

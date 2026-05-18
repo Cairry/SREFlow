@@ -1,0 +1,111 @@
+package repos
+
+import (
+	"RCAgent/internal/models"
+	"context"
+
+	"gorm.io/gorm"
+)
+
+type (
+	topologyRepo struct {
+		entry
+	}
+
+	InterTopologyRepo interface {
+		Create(params models.Topology) error
+		Update(params models.Topology) error
+		Delete(tenantId, id string) error
+		List(tenantId, query string, page models.Page) ([]models.TopologyList, int64, error)
+		Get(tenantId, id string) (models.Topology, error)
+		GetDetail(tenantId, id string) (models.Topology, error)
+	}
+)
+
+func newInterTopologyRepo(db *gorm.DB, g InterGormClient) InterTopologyRepo {
+	return &topologyRepo{
+		entry{
+			gorm:  g,
+			mysql: db,
+		},
+	}
+}
+
+func (t topologyRepo) Create(params models.Topology) error {
+	err := t.gorm.Create(context.Background(), params)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t topologyRepo) Update(params models.Topology) error {
+	err := t.gorm.Update(context.Background(), params, map[string]interface{}{
+		"tenant_id = ?": params.TenantId,
+		"id = ?":        params.ID,
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t topologyRepo) Delete(tenantId, id string) error {
+	err := t.gorm.Delete(context.Background(), &models.Topology{}, map[string]interface{}{
+		"tenant_id = ?": tenantId,
+		"id = ?":        id,
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t topologyRepo) List(tenantId, query string, page models.Page) ([]models.TopologyList, int64, error) {
+	var (
+		data  []models.TopologyList
+		db    = t.mysql.Model(&models.Topology{})
+		count int64
+	)
+
+	if tenantId != "" {
+		db.Where("tenant_id = ?", tenantId)
+	}
+	if query != "" {
+		db.Where("name LIKE ? OR id LIKE ?", "%"+query+"%", "%"+query+"%")
+	}
+
+	db.Count(&count)
+	db.Limit(int(page.Size)).Offset(int((page.Index - 1) * page.Size))
+	err := db.Find(&data).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return data, count, nil
+}
+
+func (t topologyRepo) Get(tenantId, id string) (models.Topology, error) {
+	var (
+		data models.Topology
+		db   = t.mysql.Model(&models.Topology{})
+	)
+
+	if tenantId != "" {
+		db.Where("tenant_id = ?", tenantId)
+	}
+	if id != "" {
+		db.Where("id = ?", id)
+	}
+
+	err := db.First(&data).Error
+	if err != nil {
+		return data, err
+	}
+	return data, nil
+}
+
+// GetDetail 获取拓扑的完整信息，包括nodes和edges
+func (t topologyRepo) GetDetail(tenantId, id string) (models.Topology, error) {
+	return t.Get(tenantId, id)
+}

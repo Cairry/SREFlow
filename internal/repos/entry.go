@@ -1,32 +1,73 @@
 package repos
 
 import (
-	"Zeus/pkg/client"
-
 	"gorm.io/gorm"
 )
 
 type (
 	entry struct {
-		mysql *gorm.DB
-		gorm  InterGormClient
+		mysql      *gorm.DB
+		gorm       InterGormClient
+		topo       InterTopologyRepo
+		workflow   WorkflowRepoInter
+		workspace  WorkspaceRepoInter
+		datasource DatasourceRepoInter
+		mcpServer  MCPServerRepoInter
 	}
 
 	EntryInter interface {
 		MySQL() *gorm.DB
 		Gorm() InterGormClient
-		User() UserRepoInter
+		Topology() InterTopologyRepo
+		Workflow() WorkflowRepoInter
+		Workspace() WorkspaceRepoInter
+		Datasource() DatasourceRepoInter
+		MCPServer() MCPServerRepoInter
 	}
 )
 
-func NewEntryRepo() EntryInter {
-	mysql := client.InitDB()
+func NewEntryRepo(db *gorm.DB) EntryInter {
 	return &entry{
-		mysql: mysql,
-		gorm:  NewGormClient(mysql),
+		mysql:      db,
+		gorm:       NewGormClient(db),
+		workflow:   NewWorkflowRepo(db),
+		workspace:  NewGormWorkspaceRepo(db),
+		datasource: NewGormDatasourceRepo(db),
+		mcpServer:  NewGormMCPServerRepo(db),
 	}
 }
 
-func (e entry) MySQL() *gorm.DB       { return e.mysql }
-func (e entry) Gorm() InterGormClient { return e.gorm }
-func (e entry) User() UserRepoInter   { return NewRepoUser(e.mysql) }
+// MySQL returns the database connection
+func (e *entry) MySQL() *gorm.DB {
+	return e.mysql
+}
+
+// Gorm returns the GORM client
+func (e *entry) Gorm() InterGormClient {
+	return e.gorm
+}
+
+// Topology returns the topology repository
+func (e *entry) Topology() InterTopologyRepo {
+	return e.topo
+}
+
+// Workflow returns the workflow repository
+func (e *entry) Workflow() WorkflowRepoInter {
+	return e.workflow
+}
+
+// Workspace returns the workspace repository
+func (e *entry) Workspace() WorkspaceRepoInter {
+	return e.workspace
+}
+
+// Datasource returns the datasource repository
+func (e *entry) Datasource() DatasourceRepoInter {
+	return e.datasource
+}
+
+// MCPServer returns the MCP server repository
+func (e *entry) MCPServer() MCPServerRepoInter {
+	return e.mcpServer
+}

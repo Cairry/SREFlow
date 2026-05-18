@@ -1,8 +1,8 @@
 package types
 
 import (
-	"Zeus/internal/ctx"
-	"Zeus/internal/models"
+	"RCAgent/internal/ctx"
+	"RCAgent/internal/models"
 	"fmt"
 )
 

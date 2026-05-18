@@ -1,0 +1,44 @@
+{
+  "servers": {
+    "mcp-server": {
+      "name": "MCP 服务器",
+      "type": "streamableHttp",
+      "url": "https://openapi-mcp.ap-southeast-1.aliyuncs.com/id/.../mcp",
+      "description": "可流式传输的 HTTP MCP 服务器",
+      "timeout": "60s",
+      "enabled": true,
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer token"
+      }
+    },
+    "filesystem": {
+      "name": "filesystem",
+      "type": "http",
+      "url": "http://localhost:3001",
+      "description": "文件系统操作工具",
+      "timeout": "30s",
+      "enabled": true
+    },
+    "database": {
+      "name": "database",
+      "type": "http",
+      "url": "http://localhost:3002",
+      "api_key": "your-api-key",
+      "description": "数据库查询工具",
+      "timeout": "30s",
+      "enabled": true,
+      "headers": {
+        "X-Custom-Header": "custom-value"
+      }
+    },
+    "websearch": {
+      "name": "websearch",
+      "type": "http",
+      "url": "http://localhost:3003",
+      "description": "网络搜索工具",
+      "timeout": "30s",
+      "enabled": false
+    }
+  }
+}

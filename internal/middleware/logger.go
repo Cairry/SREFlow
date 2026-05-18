@@ -3,7 +3,6 @@ package middleware
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/zeromicro/go-zero/core/logc"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -25,8 +24,13 @@ func Logger() gin.HandlerFunc {
 			return
 		}
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-		fmt.Println("Body:", string(bodyBytes))
-		fmt.Println("Query Params:", c.Request.URL.Query())
+
+		ctxWithReq := logx.ContextWithFields(context.Background(),
+			logx.Field("method", c.Request.Method),
+			logx.Field("path", c.Request.URL.Path),
+		)
+		logc.Infof(ctxWithReq, "Body: %s", string(bodyBytes))
+		logc.Infof(ctxWithReq, "Query Params: %v", c.Request.URL.Query())
 
 		/*
 			封装请求日志
