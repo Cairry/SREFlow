@@ -38,7 +38,7 @@ func ExecutePrometheus(ctx context.Context, nc *models.NodeContext) (*models.Nod
 
 	// 验证必需配置
 	if prometheusUrl == "" {
-		return errorResult("prometheusUrl is required - please configure datasourceId or set prometheusUrl explicitly"), nil
+		return errorResult("prometheusUrl is required - please configure a Prometheus integration or set prometheusUrl explicitly"), nil
 	}
 
 	log.Printf("[Prometheus] Querying %s with: %s", prometheusUrl, query)

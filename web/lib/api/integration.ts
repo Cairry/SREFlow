@@ -16,7 +16,6 @@ export interface HttpConfig {
 export interface AIConfig {
   api: string;
   apiKey: string;
-  model: string;
   baseURL?: string;
 }
 
@@ -24,11 +23,10 @@ export interface KubeConfig {
   kubeconfig: string;
 }
 
-export interface Datasource {
+export interface Integration {
   id: string;
   workspaceId: string;
   name: string;
-  description: string;
   type: string;
   httpConfig?: HttpConfig;
   aiConfig?: AIConfig;
@@ -71,63 +69,46 @@ async function request<T>(
   throw new Error(result.msg || result.Message || "API request failed");
 }
 
-export const datasourceApi = {
-  list(type?: string): Promise<{ datasources: Datasource[] }> {
+export const integrationApi = {
+  list(type?: string): Promise<{ integrations: Integration[] }> {
     const qs = type ? `?type=${type}` : "";
-    return request<{ datasources: Datasource[] }>(`/api/datasources${qs}`);
+    return request<{ integrations: Integration[] }>(`/api/integrations${qs}`);
   },
 
-  getById(id: string): Promise<Datasource> {
-    return request<Datasource>(`/api/datasources/${id}`);
-  },
-
-  create(data: {
-    name: string;
-    description: string;
-    type: string;
-    httpConfig?: HttpConfig;
-    aiConfig?: AIConfig;
-    kubeConfig?: KubeConfig;
-  }): Promise<Datasource> {
-    return request<Datasource>("/api/datasources", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+  getById(id: string): Promise<Integration> {
+    return request<Integration>(`/api/integrations/${id}`);
   },
 
   update(
     id: string,
     data: {
       name: string;
-      description: string;
       httpConfig?: HttpConfig;
       aiConfig?: AIConfig;
     }
-  ): Promise<Datasource> {
-    return request<Datasource>(`/api/datasources/${id}`, {
+  ): Promise<Integration> {
+    return request<Integration>(`/api/integrations/${id}`, {
       method: "PUT",
       body: JSON.stringify({ ...data, id }),
     });
   },
 
-  delete(id: string): Promise<void> {
-    return request<void>(`/api/datasources/${id}`, {
-      method: "DELETE",
-    });
-  },
-
   getNamespaces(id: string): Promise<{ namespaces: string[] }> {
-    return request<{ namespaces: string[] }>(`/api/datasources/${id}/namespaces`);
+    return request<{ namespaces: string[] }>(`/api/integrations/${id}/namespaces`);
   },
 
   getPods(id: string, namespace: string): Promise<{ pods: string[] }> {
-    return request<{ pods: string[] }>(`/api/datasources/${id}/pods?namespace=${encodeURIComponent(namespace)}`);
+    return request<{ pods: string[] }>(`/api/integrations/${id}/pods?namespace=${encodeURIComponent(namespace)}`);
   },
 
   testK8sConnection(kubeconfig: string): Promise<{ connected: boolean; serverVersion: string; namespaceCount: number }> {
-    return request("/api/datasources/test-k8s", {
+    return request("/api/integrations/test-k8s", {
       method: "POST",
       body: JSON.stringify({ kubeconfig }),
     });
+  },
+
+  listModels(): Promise<{ models: { id: string; name: string }[] }> {
+    return request("/api/integrations/models");
   },
 };

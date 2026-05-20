@@ -138,7 +138,7 @@ func (e *LLMExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext) 
 	httpCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(httpCtx, "POST", baseURL, bytes.NewReader(bodyBytes))
+	req, err := http.NewRequestWithContext(httpCtx, "POST", baseURL+"/chat/completions", bytes.NewReader(bodyBytes))
 	if err != nil {
 		log.Printf("[LLM] Failed to create request: %v", err)
 		return nil, fmt.Errorf("failed to create request: %w", err)

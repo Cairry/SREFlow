@@ -14,7 +14,7 @@ var (
 	Topology   TopologyService
 	Workflow   *NewWorkflowService
 	Workspace  *WorkspaceService
-	Datasource *DatasourceService
+	Integration *IntegrationService
 	MCP        *MCPService
 )
 
@@ -29,9 +29,18 @@ func Init(ctx *ctx.Context) {
 		MaxRetries:         3,
 		RetryDelay:         5 * time.Second,
 	}
-	Workflow = NewNewWorkflowService(workflowConfig, ctx.Database.Workflow(), repos.NewWorkflowExecutionRepo(ctx.Database.MySQL()), ctx.Database.Datasource(), repos.NewWorkflowVersionRepo(ctx.Database.MySQL()), ctx.Database.MCPServer())
+	Workflow = NewNewWorkflowService(workflowConfig, ctx.Database.Workflow(), repos.NewWorkflowExecutionRepo(ctx.Database.MySQL()), ctx.Database.Integration(), repos.NewWorkflowVersionRepo(ctx.Database.MySQL()), ctx.Database.MCPServer())
 	Workspace = NewWorkspaceService(ctx.Database.Workspace(), ctx.Database.Workflow())
-	Datasource = NewDatasourceService(ctx.Database.Datasource(), ctx.Database.Workflow())
+	Integration = NewIntegrationService(ctx.Database.Integration(), ctx.Database.Workflow())
+	Workspace.SetIntegrationService(Integration)
+
+	// 确保所有现有工作空间都拥有默认集成
+	workspaces, err := ctx.Database.Workspace().GetAll()
+	if err == nil {
+		for _, ws := range workspaces {
+			Integration.EnsureDefaultIntegrations(ws.ID)
+		}
+	}
 	MCP = &MCPService{}
 	MCP.Init(ctx.Database.MCPServer())
 

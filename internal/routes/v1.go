@@ -20,8 +20,8 @@ func Register(engine *gin.Engine) {
 	// Workspace routes
 	api.WorkspaceController.API(group)
 
-	// Datasource routes
-	api.DatasourceController.API(group)
+	// Integration routes
+	api.IntegrationController.API(group)
 
 	// MCP Server routes
 	api.MCPController.API(group)

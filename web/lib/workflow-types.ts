@@ -7,11 +7,9 @@ export interface BaseNodeData {
 }
 
 export interface LLMNodeData extends BaseNodeData {
-  provider: "openai" | "google" | "xai";
   model: string;
   prompt: string;
   systemPrompt?: string;
-  datasourceId?: string;
 }
 
 export interface ConditionNodeData extends BaseNodeData {
@@ -24,7 +22,6 @@ export interface PrometheusNodeData extends BaseNodeData {
   prometheusUrl: string;
   query: string;
   timeout?: number;
-  datasourceId?: string;
 }
 
 export interface JaegerNodeData extends BaseNodeData {
@@ -34,7 +31,6 @@ export interface JaegerNodeData extends BaseNodeData {
   traceId?: string;
   timeRange?: string;
   limit?: number;
-  datasourceId?: string;
 }
 
 export interface ElasticsearchNodeData extends BaseNodeData {
@@ -44,7 +40,6 @@ export interface ElasticsearchNodeData extends BaseNodeData {
   queryType: "match" | "term" | "range" | "bool";
   timeRange?: string;
   size?: number;
-  datasourceId?: string;
 }
 
 export interface LokiNodeData extends BaseNodeData {
@@ -53,7 +48,6 @@ export interface LokiNodeData extends BaseNodeData {
   labels?: Record<string, string>;
   timeRange?: string;
   limit?: number;
-  datasourceId?: string;
 }
 
 export interface ClickHouseNodeData extends BaseNodeData {
@@ -62,7 +56,6 @@ export interface ClickHouseNodeData extends BaseNodeData {
   query: string;
   username?: string;
   password?: string;
-  datasourceId?: string;
 }
 
 export interface SSHNodeData extends BaseNodeData {
@@ -70,11 +63,9 @@ export interface SSHNodeData extends BaseNodeData {
   port?: number;
   command: string;
   timeout?: number;
-  datasourceId?: string;
 }
 
 export interface KubernetesNodeData extends BaseNodeData {
-  datasourceId?: string;
   namespace?: string;
   pod?: string; // "all" or specific pod name
   resourceType?: "status" | "event";

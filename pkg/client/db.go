@@ -43,7 +43,7 @@ func NewDBClient(dbcfg config.Database) *gorm.DB {
 		&models.UserModel{},
 		&models.Workflow{},
 		&models.WorkflowExecutionRecord{},
-		&models.Datasource{},
+		&models.Integration{},
 		&models.Workspace{},
 		&models.WorkflowVersion{},
 		&models.MCPServer{},

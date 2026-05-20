@@ -46,9 +46,8 @@ type Node struct {
 }
 
 type NodeData struct {
-	Type         string        `json:"type"`
-	DatasourceId string        `json:"datasourceId"`
-	NodeMetrics  []NodeMetrics `json:"metrics"`
+	Type        string        `json:"type"`
+	NodeMetrics []NodeMetrics `json:"metrics"`
 }
 
 type NodeMetrics struct {

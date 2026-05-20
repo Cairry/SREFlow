@@ -64,8 +64,8 @@ type NewWorkflowService struct {
 }
 
 // NewNewWorkflowService 创建工作流服务
-func NewNewWorkflowService(config *workflow.EngineConfig, workflowRepo repos.WorkflowRepoInter, executionRepo repos.WorkflowExecutionRepoInter, datasourceRepo repos.DatasourceRepoInter, versionRepo repos.WorkflowVersionRepoInter, mcpRepo repos.MCPServerRepoInter) *NewWorkflowService {
-	engine := workflow.NewWorkflowEngine(config, datasourceRepo, mcpRepo)
+func NewNewWorkflowService(config *workflow.EngineConfig, workflowRepo repos.WorkflowRepoInter, executionRepo repos.WorkflowExecutionRepoInter, integrationRepo repos.IntegrationRepoInter, versionRepo repos.WorkflowVersionRepoInter, mcpRepo repos.MCPServerRepoInter) *NewWorkflowService {
+	engine := workflow.NewWorkflowEngine(config, integrationRepo, mcpRepo)
 	parser := workflow.NewWorkflowParser()
 	monitor := engine.GetMonitor()
 	stateManager := engine.GetStateManager()

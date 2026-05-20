@@ -16,11 +16,17 @@ import (
 type WorkspaceService struct {
 	workspaceRepo repos.WorkspaceRepoInter
 	workflowRepo  repos.WorkflowRepoInter
+	integrationService *IntegrationService
 }
 
 // NewWorkspaceService 创建工作空间服务
 func NewWorkspaceService(workspaceRepo repos.WorkspaceRepoInter, workflowRepo repos.WorkflowRepoInter) *WorkspaceService {
 	return &WorkspaceService{workspaceRepo: workspaceRepo, workflowRepo: workflowRepo}
+}
+
+// SetIntegrationService 设置集成服务（避免循环依赖）
+func (s *WorkspaceService) SetIntegrationService(is *IntegrationService) {
+	s.integrationService = is
 }
 
 // List 返回所有工作空间
@@ -57,6 +63,12 @@ func (s *WorkspaceService) Create(ctx context.Context, req interface{}) (data in
 	}
 
 	log.Printf("[WorkspaceService] Workspace created: %s (%s)", workspace.Name, workspace.ID)
+
+	// 为新工作空间创建所有默认集成
+	if s.integrationService != nil {
+		s.integrationService.EnsureDefaultIntegrations(workspace.ID)
+	}
+
 	return workspace, nil
 }
 

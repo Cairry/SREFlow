@@ -19,7 +19,6 @@ type (
 		Delete(id string) error
 		DeleteByWorkspaceID(workspaceID string) error
 		Search(term string) ([]*models.Workflow, error)
-		GetByDatasourceID(workspaceID, datasourceID string) ([]*models.Workflow, error)
 	}
 
 	WorkflowExecutionRepoInter interface {
@@ -122,36 +121,6 @@ func (r *workflowRepo) Search(term string) ([]*models.Workflow, error) {
 	).Order("created_at DESC").Find(&workflows).Error
 
 	return workflows, err
-}
-
-// GetByDatasourceID returns workflows that reference the given datasourceId in any node
-func (r *workflowRepo) GetByDatasourceID(workspaceID, datasourceID string) ([]*models.Workflow, error) {
-	workflows, err := r.GetByWorkspaceID(workspaceID)
-	if err != nil {
-		return nil, err
-	}
-
-	var result []*models.Workflow
-	for _, wf := range workflows {
-		if wf.Nodes == "" {
-			continue
-		}
-		var nodes []map[string]any
-		if err := json.Unmarshal([]byte(wf.Nodes), &nodes); err != nil {
-			continue
-		}
-		for _, node := range nodes {
-			data, ok := node["data"].(map[string]any)
-			if !ok {
-				continue
-			}
-			if id, ok := data["datasourceId"].(string); ok && id == datasourceID {
-				result = append(result, wf)
-				break
-			}
-		}
-	}
-	return result, nil
 }
 
 // generateID generates a unique ID for workflow

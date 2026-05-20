@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -155,9 +157,19 @@ func (s *MCPService) ListTools(c context.Context, id string) (interface{}, error
 		return nil, fmt.Errorf("server not found: %w", err)
 	}
 
+	log.Printf("[MCPService] ListTools: serverID=%s, name=%s, type=%s, url=%s, timeout=%d, enabled=%v",
+		server.ID, server.Name, server.Type, server.URL, server.Timeout, server.Enabled)
+
 	if !server.Enabled {
 		return nil, fmt.Errorf("server is disabled")
 	}
+
+	// Quick HTTP health-check to verify the server URL is reachable before creating MCP client
+	if err := s.probeEndpoint(server.URL); err != nil {
+		log.Printf("[MCPService] Health check failed for %s: %v", server.URL, err)
+		return nil, fmt.Errorf("MCP server unreachable at %s: %w", server.URL, err)
+	}
+	log.Printf("[MCPService] Health check passed for %s", server.URL)
 
 	headers := s.parseHeaders(server)
 
@@ -334,4 +346,17 @@ func (s *MCPService) toResponse(server *models.MCPServer) *types.ResponseMCPServ
 	}
 
 	return resp
+}
+
+// probeEndpoint does a quick HTTP GET to verify the MCP server URL is reachable.
+// This catches DNS errors, connection refused, etc. before the slow MCP handshake times out.
+func (s *MCPService) probeEndpoint(url string) error {
+	httpClient := &http.Client{Timeout: 5 * time.Second}
+	resp, err := httpClient.Get(url)
+	if err != nil {
+		return fmt.Errorf("HTTP probe failed: %w", err)
+	}
+	resp.Body.Close()
+	log.Printf("[MCPService] Probe endpoint %s returned HTTP %d", url, resp.StatusCode)
+	return nil
 }

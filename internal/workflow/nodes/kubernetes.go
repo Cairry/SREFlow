@@ -18,18 +18,18 @@ import (
 // KubernetesExecutor Kubernetes节点执行器
 type KubernetesExecutor struct {
 	DefaultNodeExecutor
-	datasourceRepo repos.DatasourceRepoInter
+	integrationRepo repos.IntegrationRepoInter
 }
 
 // NewKubernetesExecutor 创建Kubernetes执行器
-func NewKubernetesExecutor(repo repos.DatasourceRepoInter) *KubernetesExecutor {
+func NewKubernetesExecutor(repo repos.IntegrationRepoInter) *KubernetesExecutor {
 	return &KubernetesExecutor{
 		DefaultNodeExecutor: DefaultNodeExecutor{
 			NodeType:    "Kubernetes",
 			Category:    "data",
 			Description: "Query Kubernetes pod status and events",
 		},
-		datasourceRepo: repo,
+		integrationRepo: repo,
 	}
 }
 
@@ -45,19 +45,15 @@ func NewKubernetesExecutorNoRepo() *KubernetesExecutor {
 }
 
 func (e *KubernetesExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext) (*models.NodeResult, error) {
-	return ExecuteKubernetes(ctx, nodeCtx, e.datasourceRepo)
+	return ExecuteKubernetes(ctx, nodeCtx, e.integrationRepo)
 }
 
 // ExecuteKubernetes 执行Kubernetes查询
-func ExecuteKubernetes(ctx context.Context, nc *models.NodeContext, datasourceRepo repos.DatasourceRepoInter) (*models.NodeResult, error) {
-	datasourceID := getStr(nc.Config, "datasourceId", "")
+func ExecuteKubernetes(ctx context.Context, nc *models.NodeContext, integrationRepo repos.IntegrationRepoInter) (*models.NodeResult, error) {
 	namespace := getStr(nc.Config, "namespace", "")
 	pod := getStr(nc.Config, "pod", "all")
 	resourceType := getStr(nc.Config, "resourceType", "status")
 
-	if datasourceID == "" {
-		return errorResult("datasourceId is required - please select a Kubernetes datasource"), nil
-	}
 	if namespace == "" {
 		return errorResult("namespace is required - please select a namespace"), nil
 	}
@@ -65,7 +61,7 @@ func ExecuteKubernetes(ctx context.Context, nc *models.NodeContext, datasourceRe
 	// 获取 kubeconfig
 	kubeconfigStr := getStr(nc.Config, "kubeconfig", "")
 	if kubeconfigStr == "" {
-		return errorResult("kubeconfig is not configured - please check datasource configuration"), nil
+		return errorResult("kubeconfig is not configured - please check integration configuration"), nil
 	}
 
 	// 构建 k8s client

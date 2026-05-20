@@ -11,7 +11,7 @@ type (
 		topo       InterTopologyRepo
 		workflow   WorkflowRepoInter
 		workspace  WorkspaceRepoInter
-		datasource DatasourceRepoInter
+		integration IntegrationRepoInter
 		mcpServer  MCPServerRepoInter
 	}
 
@@ -21,7 +21,7 @@ type (
 		Topology() InterTopologyRepo
 		Workflow() WorkflowRepoInter
 		Workspace() WorkspaceRepoInter
-		Datasource() DatasourceRepoInter
+		Integration() IntegrationRepoInter
 		MCPServer() MCPServerRepoInter
 	}
 )
@@ -32,7 +32,7 @@ func NewEntryRepo(db *gorm.DB) EntryInter {
 		gorm:       NewGormClient(db),
 		workflow:   NewWorkflowRepo(db),
 		workspace:  NewGormWorkspaceRepo(db),
-		datasource: NewGormDatasourceRepo(db),
+		integration: NewGormIntegrationRepo(db),
 		mcpServer:  NewGormMCPServerRepo(db),
 	}
 }
@@ -62,9 +62,9 @@ func (e *entry) Workspace() WorkspaceRepoInter {
 	return e.workspace
 }
 
-// Datasource returns the datasource repository
-func (e *entry) Datasource() DatasourceRepoInter {
-	return e.datasource
+// Integration returns the integration repository
+func (e *entry) Integration() IntegrationRepoInter {
+	return e.integration
 }
 
 // MCPServer returns the MCP server repository

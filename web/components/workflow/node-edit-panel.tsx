@@ -13,9 +13,10 @@ loader.config({
 import { SidebarDialog, ModalDialog } from "./ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { VariablePicker, useVariablePickerShortcuts } from "./variable-picker";
-import { Database, ExternalLink, Loader2, ChevronDown, ChevronRight, Variable, Sparkles, Braces, Maximize2, Minimize2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Variable, Sparkles, Braces, Maximize2, Minimize2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { mcpApi } from "@/lib/api/mcp";
-import { datasourceApi, Datasource, AIConfig, KubeConfig } from "@/lib/api/datasource";
+import { integrationApi } from "@/lib/api/integration";
 
 // Node output variables definition
 export const NODE_OUTPUT_VARIABLES: Record<string, { name: string; type: string; description: string }[]> = {
@@ -93,24 +94,9 @@ interface NodeEditPanelProps {
   onClose: () => void;
 }
 
-// Map node types to their corresponding datasource types
-const NODE_TO_DATASOURCE_TYPE: Record<string, string> = {
-  Prometheus: "Prometheus",
-  Jaeger: "Jaeger",
-  Elasticsearch: "Elasticsearch",
-  Loki: "Loki",
-  ClickHouse: "ClickHouse",
-  LLM: "LLM",
-  SSH: "SSHAuth",
-  Kubernetes: "Kubernetes",
-};
-
 export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEditPanelProps) {
   const { toast } = useToast();
   const [showOutputVars, setShowOutputVars] = useState(false);
-  const [datasources, setDatasources] = useState<Datasource[]>([]);
-  const [loadingDatasources, setLoadingDatasources] = useState(false);
-  const [selectedDatasourceId, setSelectedDatasourceId] = useState<string>("");
   const [beautifyingSystem, setBeautifyingSystem] = useState(false);
   const [beautifyingPrompt, setBeautifyingPrompt] = useState(false);
   const [activePicker, setActivePicker] = useState<string | null>(null);
@@ -233,10 +219,6 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
   };
 
   useEffect(() => {
-    loadDatasources();
-  }, []);
-
-  useEffect(() => {
     if (node?.type !== "MCP") {
       setMcpInputSchema(null);
       return;
@@ -258,46 +240,30 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
       .finally(() => setLoadingMcpSchema(false));
   }, [node?.id, node?.type, (node?.data as Record<string, unknown>)?.serverId, (node?.data as Record<string, unknown>)?.toolName]);
 
-  const loadDatasources = async () => {
-    setLoadingDatasources(true);
-    try {
-      const data = await datasourceApi.list();
-      setDatasources(data.datasources || []);
-    } catch (error) {
-      console.error("Failed to load datasources:", error);
-    } finally {
-      setLoadingDatasources(false);
-    }
-  };
-
-  const getCurrentDatasource = (): AIConfig | null => {
-    const datasourceId = safeGetValue("datasourceId");
-    if (!datasourceId) return null;
-    const ds = datasources.find(d => d.id === datasourceId);
-    return ds?.aiConfig || null;
-  };
-
   const beautifyPrompt = async (field: "systemPrompt" | "prompt", currentValue: string) => {
     if (!currentValue.trim()) return;
-
-    const aiConfig = getCurrentDatasource();
-    if (!aiConfig?.api || !aiConfig?.apiKey) {
-      console.error("No AI datasource configured");
-      return;
-    }
 
     if (field === "systemPrompt") setBeautifyingSystem(true);
     else setBeautifyingPrompt(true);
 
     try {
-      const response = await fetch(`${aiConfig.api}`, {
+      // Auto-resolve LLM integration from workspace
+      const data = await integrationApi.list("LLM");
+      const llmIntegration = (data.integrations || [])[0];
+      if (!llmIntegration?.aiConfig?.api || !llmIntegration?.aiConfig?.apiKey) {
+        console.error("No LLM integration configured");
+        return;
+      }
+      const aiConfig = llmIntegration.aiConfig;
+
+      const response = await fetch(`${aiConfig.api}/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${aiConfig.apiKey}`,
         },
         body: JSON.stringify({
-          model: aiConfig.model || "gpt-4o",
+          model: (node.data as Record<string, unknown>)?.model || "gpt-4o",
           messages: [
             {
               role: "user",
@@ -311,8 +277,8 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
         throw new Error(`API request failed: ${response.status}`);
       }
 
-      const data = await response.json();
-      const improved = data.choices?.[0]?.message?.content;
+      const result = await response.json();
+      const improved = result.choices?.[0]?.message?.content;
 
       if (improved) {
         handleChange(field, improved.trim());
@@ -336,50 +302,6 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
     onUpdate(node.id, { ...currentData, [key]: value });
   };
 
-  const handleDatasourceChange = (datasourceId: string) => {
-    setSelectedDatasourceId(datasourceId);
-    if (!datasourceId) {
-      handleChange("datasourceId", "");
-      return;
-    }
-
-    handleChange("datasourceId", datasourceId);
-
-    const datasource = datasources.find(ds => ds.id === datasourceId);
-    if (!datasource) return;
-
-    // Auto-fill node data based on datasource type
-    if (datasource.type === "Prometheus") {
-      handleChange("prometheusUrl", datasource.httpConfig?.endpoint || "");
-    } else if (datasource.type === "Jaeger") {
-      handleChange("jaegerUrl", datasource.httpConfig?.endpoint || "");
-    } else if (datasource.type === "Elasticsearch") {
-      handleChange("elasticsearchUrl", datasource.httpConfig?.endpoint || "");
-    } else if (datasource.type === "Loki") {
-      handleChange("lokiUrl", datasource.httpConfig?.endpoint || "");
-    } else if (datasource.type === "ClickHouse") {
-      handleChange("clickhouseUrl", datasource.httpConfig?.endpoint || "");
-    } else if (datasource.type === "SSHAuth") {
-      handleChange("authType", datasource.httpConfig?.auth?.type || "ssh_password");
-      handleChange("authUsername", datasource.httpConfig?.auth?.username || "");
-      handleChange("authPassword", datasource.httpConfig?.auth?.password || "");
-      handleChange("authPrivateKey", datasource.httpConfig?.auth?.privateKey || "");
-    } else if (datasource.type === "LLM") {
-      handleChange("aiApi", datasource.aiConfig?.api || "https://api.openai.com/v1");
-      handleChange("aiApiKey", datasource.aiConfig?.apiKey || "");
-      handleChange("model", datasource.aiConfig?.model || "gpt-4o");
-      // Set provider based on API URL
-      const apiUrl = datasource.aiConfig?.api || "";
-      if (apiUrl.includes("google") || apiUrl.includes("gemini")) {
-        handleChange("provider", "google");
-      } else if (apiUrl.includes("x.ai") || apiUrl.includes("xai")) {
-        handleChange("provider", "xai");
-      } else {
-        handleChange("provider", "openai");
-      }
-    }
-  };
-
   const safeGetValue = (field: string, defaultValue: any = '') => {
     const data = node.data || {};
     return data[field] !== undefined ? data[field] : defaultValue;
@@ -389,57 +311,6 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
   const selectClass = "w-full bg-workflow-surface/50 border border-workflow-border rounded-lg px-3 py-2 text-sm text-workflow-text font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors duration-200 cursor-pointer";
   const textareaClass = "w-full bg-workflow-surface/50 border border-workflow-border rounded-lg px-3 py-2 text-sm text-workflow-text font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors duration-200 resize-none";
   const labelClass = "block text-xs text-workflow-text-muted font-mono mb-1.5";
-
-  const nodeDatasourceType = NODE_TO_DATASOURCE_TYPE[node.type];
-  const availableDatasources = datasources.filter(ds => ds.type === nodeDatasourceType);
-
-  // Render datasource selector for supported node types
-  const renderDatasourceSelector = () => {
-    if (!nodeDatasourceType) return null;
-
-    return (
-      <div>
-        <label className={labelClass}>
-          <div className="flex items-center gap-1.5">
-            <Database className="h-3 w-3" />
-            Datasource
-          </div>
-        </label>
-        {loadingDatasources ? (
-          <div className="flex items-center gap-2 text-workflow-text-muted text-sm">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading datasources...
-          </div>
-        ) : (
-          <select
-            value={safeGetValue("datasourceId", "")}
-            onChange={(e) => handleDatasourceChange(e.target.value)}
-            className={selectClass}
-          >
-            <option value="">-- Select Datasource --</option>
-            {availableDatasources.map((ds) => (
-              <option key={ds.id} value={ds.id}>
-                {ds.name}
-              </option>
-            ))}
-          </select>
-        )}
-        {availableDatasources.length === 0 && !loadingDatasources && (
-          <p className="text-xs text-workflow-text-subtle mt-1">
-            No {nodeDatasourceType} datasources found.{" "}
-            <a href="/datasources" target="_blank" className="text-primary hover:underline inline-flex items-center gap-1">
-              Create one <ExternalLink className="h-3 w-3" />
-            </a>
-          </p>
-        )}
-        {node.type !== "LLM" && (
-          <p className="text-xs text-workflow-text-subtle mt-1">
-            Select a datasource to auto-fill configuration
-          </p>
-        )}
-      </div>
-    );
-  };
 
   return (
     <SidebarDialog
@@ -452,27 +323,11 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
       {/* LLM Node */}
       {node.type === "LLM" && (
         <>
-          {renderDatasourceSelector()}
 
-          {safeGetValue("datasourceId") && (
-            <div className="bg-workflow-surface/30 rounded-lg p-3 space-y-2 border border-workflow-border">
-              <p className="text-xs text-workflow-text-muted font-mono">Datasource Configuration (read-only)</p>
-              <div className="space-y-1 text-xs">
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-workflow-text-subtle font-mono">API</span>
-                  <span className="text-workflow-text font-mono break-all text-[11px]">
-                    {datasources.find(ds => ds.id === safeGetValue("datasourceId"))?.aiConfig?.api}
-                  </span>
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-workflow-text-subtle font-mono">Model</span>
-                  <span className="text-workflow-text font-mono text-[11px]">
-                    {datasources.find(ds => ds.id === safeGetValue("datasourceId"))?.aiConfig?.model}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
+          <div>
+            <label className={labelClass}>Model</label>
+            <ModelSelector value={safeGetValue("model", "") as string} onChange={(v) => handleChange("model", v)} />
+          </div>
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
@@ -493,7 +348,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
                 <button
                   type="button"
                   onClick={() => beautifyPrompt("systemPrompt", safeGetValue("systemPrompt", ""))}
-                  disabled={beautifyingSystem || !safeGetValue("datasourceId")}
+                  disabled={beautifyingSystem}
                   className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono text-workflow-text-muted border border-workflow-border rounded hover:bg-workflow-surface-hover transition-colors duration-200"
                   title="Beautify with AI"
                 >
@@ -533,7 +388,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
                 <button
                   type="button"
                   onClick={() => beautifyPrompt("prompt", safeGetValue("prompt", ""))}
-                  disabled={beautifyingPrompt || !safeGetValue("datasourceId")}
+                  disabled={beautifyingPrompt}
                   className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono text-workflow-text-muted border border-workflow-border rounded hover:bg-workflow-surface-hover transition-colors duration-200"
                   title="Beautify with AI"
                 >
@@ -560,7 +415,6 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
       {/* Prometheus Node */}
       {node.type === "Prometheus" && (
         <>
-          {renderDatasourceSelector()}
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
@@ -604,7 +458,6 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
       {/* Jaeger Node */}
       {node.type === "Jaeger" && (
         <>
-          {renderDatasourceSelector()}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -644,7 +497,6 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
       {/* Elasticsearch Node */}
       {node.type === "Elasticsearch" && (
         <>
-          {renderDatasourceSelector()}
 
           <div>
             <label className={labelClass}>Index</label>
@@ -686,7 +538,6 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
       {/* Loki Node */}
       {node.type === "Loki" && (
         <>
-          {renderDatasourceSelector()}
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
@@ -718,7 +569,6 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
       {/* ClickHouse Node */}
       {node.type === "ClickHouse" && (
         <>
-          {renderDatasourceSelector()}
 
           <div>
             <label className={labelClass}>Database</label>
@@ -760,7 +610,6 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
       {/* SSH Node */}
       {node.type === "SSH" && (
         <>
-          {renderDatasourceSelector()}
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
@@ -856,16 +705,13 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
       {/* Kubernetes Node */}
       {node.type === "Kubernetes" && (
         <>
-          {renderDatasourceSelector()}
 
           <K8sNamespaceSelector
-            datasourceId={safeGetValue("datasourceId", "")}
             namespace={safeGetValue("namespace", "")}
             onNamespaceChange={(val) => handleChange("namespace", val)}
           />
 
           <K8sPodSelector
-            datasourceId={safeGetValue("datasourceId", "")}
             namespace={safeGetValue("namespace", "")}
             pod={safeGetValue("pod", "all")}
             onPodChange={(val) => handleChange("pod", val)}
@@ -1433,26 +1279,82 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
   );
 }
 
-// K8sNamespaceSelector — dynamically loads namespaces from K8s datasource
-function K8sNamespaceSelector({ datasourceId, namespace, onNamespaceChange }: {
-  datasourceId: string;
+// ModelSelector — dynamically loads available LLM models from integration
+function ModelSelector({ value, onChange }: {
+  value: string;
+  onChange: (val: string) => void;
+}) {
+  const [models, setModels] = useState<{ id: string; name: string }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setLoading(true);
+    setError("");
+    integrationApi.listModels()
+      .then((data) => setModels(data.models || []))
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Failed to load models");
+        setModels([]);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const selectClass = "w-full bg-workflow-surface/50 border border-workflow-border rounded-lg px-3 py-2 text-sm text-workflow-text font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors duration-200 cursor-pointer";
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-workflow-text-muted text-sm">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading models...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-xs text-red-400 font-mono">
+        {error}
+      </div>
+    );
+  }
+
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={selectClass}
+    >
+      <option value="">-- Select Model --</option>
+      {models.map((m) => (
+        <option key={m.id} value={m.id}>{m.name}</option>
+      ))}
+    </select>
+  );
+}
+
+// K8sNamespaceSelector — dynamically loads namespaces from K8s integration
+function K8sNamespaceSelector({ namespace, onNamespaceChange }: {
   namespace: string;
   onNamespaceChange: (val: string) => void;
 }) {
   const [namespaces, setNamespaces] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [resolvedId, setResolvedId] = useState("");
 
   useEffect(() => {
-    if (!datasourceId) {
-      setNamespaces([]);
-      return;
-    }
     setLoading(true);
-    datasourceApi.getNamespaces(datasourceId)
+    integrationApi.list("Kubernetes")
+      .then((data) => {
+        const k8s = (data.integrations || [])[0];
+        if (!k8s) { setNamespaces([]); return; }
+        setResolvedId(k8s.id);
+        return integrationApi.getNamespaces(k8s.id);
+      })
       .then((data) => setNamespaces(data.namespaces || []))
       .catch(() => setNamespaces([]))
       .finally(() => setLoading(false));
-  }, [datasourceId]);
+  }, []);
 
   const selectClass = "w-full bg-workflow-surface/50 border border-workflow-border rounded-lg px-3 py-2 text-sm text-workflow-text font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors duration-200 cursor-pointer";
   const labelClass = "block text-xs text-workflow-text-muted font-mono mb-1.5";
@@ -1481,27 +1383,33 @@ function K8sNamespaceSelector({ datasourceId, namespace, onNamespaceChange }: {
   );
 }
 
-// K8sPodSelector — dynamically loads pods from K8s datasource
-function K8sPodSelector({ datasourceId, namespace, pod, onPodChange }: {
-  datasourceId: string;
+// K8sPodSelector — dynamically loads pods from K8s integration
+function K8sPodSelector({ namespace, pod, onPodChange }: {
   namespace: string;
   pod: string;
   onPodChange: (val: string) => void;
 }) {
   const [pods, setPods] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [resolvedId, setResolvedId] = useState("");
 
   useEffect(() => {
-    if (!datasourceId || !namespace) {
+    if (!namespace) {
       setPods([]);
       return;
     }
     setLoading(true);
-    datasourceApi.getPods(datasourceId, namespace)
+    integrationApi.list("Kubernetes")
+      .then((data) => {
+        const k8s = (data.integrations || [])[0];
+        if (!k8s) { setPods([]); return; }
+        setResolvedId(k8s.id);
+        return integrationApi.getPods(k8s.id, namespace);
+      })
       .then((data) => setPods(data.pods || []))
       .catch(() => setPods([]))
       .finally(() => setLoading(false));
-  }, [datasourceId, namespace]);
+  }, [namespace]);
 
   const selectClass = "w-full bg-workflow-surface/50 border border-workflow-border rounded-lg px-3 py-2 text-sm text-workflow-text font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors duration-200 cursor-pointer";
   const labelClass = "block text-xs text-workflow-text-muted font-mono mb-1.5";

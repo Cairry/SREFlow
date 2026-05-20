@@ -31,7 +31,7 @@ type NodeCategory = {
 };
 
 const CATEGORIES: NodeCategory[] = [
-  { id: "datasource", label: "Data Source", icon: <Database className="w-3 h-3" /> },
+  { id: "integration", label: "Integration", icon: <Database className="w-3 h-3" /> },
   { id: "action", label: "Action", icon: <Zap className="w-3 h-3" /> },
   { id: "ai", label: "AI", icon: <Sparkles className="w-3 h-3" /> },
   { id: "logic", label: "Logic", icon: <Puzzle className="w-3 h-3" /> },
@@ -47,13 +47,13 @@ type NodeDef = {
 };
 
 const NODE_DEFINITIONS: NodeDef[] = [
-  // Data Source
-  { type: "Prometheus", label: "Prometheus", description: "Query metrics with PromQL", icon: <Activity className="w-4 h-4" />, category: "datasource" },
-  { type: "Jaeger", label: "Jaeger", description: "Query distributed traces", icon: <Search className="w-4 h-4" />, category: "datasource" },
-  { type: "Elasticsearch", label: "Elasticsearch", description: "Search and analyze logs", icon: <Search className="w-4 h-4" />, category: "datasource" },
-  { type: "Loki", label: "Loki", description: "Query logs with LogQL", icon: <Search className="w-4 h-4" />, category: "datasource" },
-  { type: "ClickHouse", label: "ClickHouse", description: "Execute SQL queries", icon: <BarChart3 className="w-4 h-4" />, category: "datasource" },
-  { type: "Kubernetes", label: "Kubernetes", description: "Query pod status and events", icon: <Activity className="w-4 h-4" />, category: "datasource" },
+  // Integration
+  { type: "Prometheus", label: "Prometheus", description: "Query metrics with PromQL", icon: <Activity className="w-4 h-4" />, category: "integration" },
+  { type: "Jaeger", label: "Jaeger", description: "Query distributed traces", icon: <Search className="w-4 h-4" />, category: "integration" },
+  { type: "Elasticsearch", label: "Elasticsearch", description: "Search and analyze logs", icon: <Search className="w-4 h-4" />, category: "integration" },
+  { type: "Loki", label: "Loki", description: "Query logs with LogQL", icon: <Search className="w-4 h-4" />, category: "integration" },
+  { type: "ClickHouse", label: "ClickHouse", description: "Execute SQL queries", icon: <BarChart3 className="w-4 h-4" />, category: "integration" },
+  { type: "Kubernetes", label: "Kubernetes", description: "Query pod status and events", icon: <Activity className="w-4 h-4" />, category: "integration" },
   // Action
   { type: "SSH", label: "SSH", description: "Execute commands via SSH", icon: <Terminal className="w-4 h-4" />, category: "action" },
   { type: "GoScript", label: "GoScript", description: "Execute GoScript code", icon: <Code className="w-4 h-4" />, category: "action" },

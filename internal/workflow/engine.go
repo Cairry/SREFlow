@@ -18,7 +18,7 @@ type WorkflowEngine struct {
 	monitor        *ExecutionMonitor
 	stateManager   *StateManager
 	retryPolicy    *RetryPolicy
-	datasourceRepo repos.DatasourceRepoInter
+	integrationRepo repos.IntegrationRepoInter
 	mcpRepo        repos.MCPServerRepoInter
 }
 
@@ -43,7 +43,7 @@ func DefaultEngineConfig() *EngineConfig {
 }
 
 // NewWorkflowEngine 创建新的工作流引擎
-func NewWorkflowEngine(config *EngineConfig, datasourceRepo repos.DatasourceRepoInter, mcpRepo repos.MCPServerRepoInter) *WorkflowEngine {
+func NewWorkflowEngine(config *EngineConfig, integrationRepo repos.IntegrationRepoInter, mcpRepo repos.MCPServerRepoInter) *WorkflowEngine {
 	if config == nil {
 		config = DefaultEngineConfig()
 	}
@@ -51,7 +51,7 @@ func NewWorkflowEngine(config *EngineConfig, datasourceRepo repos.DatasourceRepo
 	registry := BootstrapNodeRegistry(mcpRepo)
 	stateManager := NewStateManager()
 	monitor := NewExecutionMonitor()
-	executor := NewWorkflowExecutor(registry, config, stateManager, monitor, datasourceRepo)
+	executor := NewWorkflowExecutor(registry, config, stateManager, monitor, integrationRepo)
 	retryPolicy := NewRetryPolicy(config)
 
 	return &WorkflowEngine{
@@ -60,7 +60,7 @@ func NewWorkflowEngine(config *EngineConfig, datasourceRepo repos.DatasourceRepo
 		monitor:        monitor,
 		stateManager:   stateManager,
 		retryPolicy:    retryPolicy,
-		datasourceRepo: datasourceRepo,
+		integrationRepo: integrationRepo,
 		mcpRepo:        mcpRepo,
 	}
 }

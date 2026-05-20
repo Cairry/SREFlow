@@ -58,7 +58,7 @@ func ExecuteSSH(ctx context.Context, nc *models.NodeContext) (*models.NodeResult
 		port = 22
 	}
 	if username == "" {
-		return errorResult("username is required - please select a SSHAuth datasource"), nil
+		return errorResult("username is required - please select a SSHAuth integration"), nil
 	}
 	if command == "" {
 		return errorResult("command is required - please enter a command to execute"), nil
@@ -123,7 +123,7 @@ func ExecuteSSH(ctx context.Context, nc *models.NodeContext) (*models.NodeResult
 			}
 		}
 		if len(authMethods) == 0 {
-			return errorResult("no authentication method available - please configure password or privateKey in SSHAuth datasource"), nil
+			return errorResult("no authentication method available - please configure password or privateKey in SSHAuth integration"), nil
 		}
 	}
 

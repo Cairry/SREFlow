@@ -26,8 +26,6 @@ import { NodeEditPanel } from "./node-edit-panel";
 import { RunHistoryDialog, RunHistoryContent, RunDetails } from "./run-history-dialog";
 import { WorkflowVersionHistoryDialog } from "./workflow-version-history-dialog";
 import { ApiCallDialog } from "./api-call-dialog";
-import { DatasourceProvider } from "./datasource-context";
-import { datasourceApi } from "@/lib/api/datasource";
 import { workflowApi, API_BASE_URL, WorkflowVersion } from "@/lib/api/workflow";
 
 // Empty workflow template with default Start node
@@ -92,23 +90,7 @@ function WorkflowEditorInner({ workflowId: urlWorkflowId }: { workflowId?: Promi
   }, [workflowDescription, initialDescription]);
   const [isExecuting, setIsExecuting] = useState(false);
   const [currentExecutionId, setCurrentExecutionId] = useState<string | null>(null);
-  const [datasources, setDatasources] = useState<any[]>([]);
   const { toast } = useToast();
-
-  // Load datasources
-  useEffect(() => {
-    const loadDatasources = async () => {
-      try {
-        const data = await datasourceApi.list();
-        setDatasources(data.datasources || []);
-      } catch (error) {
-        console.error("Failed to load datasources:", error);
-        setDatasources([]);
-      }
-    };
-
-    loadDatasources();
-  }, []);
 
   // 组件卸载时清理 SSE 连接
   useEffect(() => {
@@ -903,8 +885,7 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
   };
 
   return (
-    <DatasourceProvider datasources={datasources}>
-      <div className="h-[calc(100vh-64px)] flex bg-workflow-bg">
+    <div className="h-[calc(100vh-64px)] flex bg-workflow-bg">
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col min-h-0">
           <WorkflowToolbar
@@ -1064,7 +1045,6 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
         onRestored={handleRestored}
       />
     </div>
-    </DatasourceProvider>
   );
 }
 

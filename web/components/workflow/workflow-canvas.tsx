@@ -62,8 +62,7 @@ const nodeTypes: NodeTypes = {
 export const defaultNodeData: Record<WorkflowNodeType, object> = {
   LLM: {
     label: "LLM",
-    provider: "openai",
-    model: "gpt-4o",
+    model: "",
     prompt: "",
   },
   Condition: {
@@ -137,7 +136,6 @@ export const defaultNodeData: Record<WorkflowNodeType, object> = {
   },
   Kubernetes: {
     label: "Kubernetes",
-    datasourceId: "",
     namespace: "",
     pod: "all",
     resourceType: "status",

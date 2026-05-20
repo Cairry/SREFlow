@@ -28,7 +28,7 @@ import { workspaceApi, Workspace } from "@/lib/api/workspace";
 
 const navigation = [
   { name: "Workflows", href: "/workflows", icon: Workflow },
-  { name: "Datasources", href: "/datasources", icon: Database },
+  { name: "Integrations", href: "/integrations", icon: Database },
   { name: "MCP Tools", href: "/mcp-tools", icon: Puzzle },
 ];
 
@@ -237,8 +237,8 @@ export function Navigation() {
 
           {/* Right side - Workspace Selector and Theme Toggle */}
           <div className="flex items-center gap-3">
-            {/* Workspace Selector - Only show on workflows/datasources list pages, not in workflow editor */}
-            {!loading && !isWorkflowEditor && (pathname === "/workflows" || pathname === "/datasources" || pathname === "/mcp-tools") && (
+            {/* Workspace Selector - Only show on workflows/integrations list pages, not in workflow editor */}
+            {!loading && !isWorkflowEditor && (pathname === "/workflows" || pathname === "/integrations" || pathname === "/mcp-tools") && (
               <div className="flex items-center">
                 <LayoutGrid className="h-4 w-4 mr-2 text-muted-foreground" />
                 {workspaces.length === 0 ? (
@@ -318,7 +318,7 @@ export function Navigation() {
           <DialogHeader>
             <DialogTitle>Manage Workspaces</DialogTitle>
             <DialogDescription>
-              View and delete workspaces. Deleting a workspace will also delete all associated workflows and datasources.
+              View and delete workspaces. Deleting a workspace will also delete all associated workflows and integrations.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-4 max-h-[300px] overflow-y-auto">
@@ -417,7 +417,7 @@ export function Navigation() {
               <>
                 Are you sure you want to delete workspace{" "}
                 <span className="font-semibold text-workflow-text">{deletingWorkspace?.name}</span>?
-                All workflows and datasources in this workspace will be deleted. This action cannot be undone.
+                All workflows and integrations in this workspace will be deleted. This action cannot be undone.
               </>
             </DialogDescription>
           </DialogHeader>
