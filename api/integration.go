@@ -1,9 +1,9 @@
 package api
 
 import (
+	"SREFlow/internal/services"
+	"SREFlow/internal/types"
 	"net/http"
-	"RCAgent/internal/services"
-	"RCAgent/internal/types"
 
 	"github.com/gin-gonic/gin"
 )

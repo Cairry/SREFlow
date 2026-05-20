@@ -6,16 +6,16 @@ import (
 	"log"
 	"time"
 
-	"RCAgent/internal/models"
-	"RCAgent/internal/repos"
-	"RCAgent/internal/types"
-	"RCAgent/pkg/tools"
+	"SREFlow/internal/models"
+	"SREFlow/internal/repos"
+	"SREFlow/internal/types"
+	"SREFlow/pkg/tools"
 )
 
 // WorkspaceService 工作空间服务
 type WorkspaceService struct {
-	workspaceRepo repos.WorkspaceRepoInter
-	workflowRepo  repos.WorkflowRepoInter
+	workspaceRepo      repos.WorkspaceRepoInter
+	workflowRepo       repos.WorkflowRepoInter
 	integrationService *IntegrationService
 }
 

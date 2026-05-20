@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"sync"
 
-	"RCAgent/internal/models"
+	"SREFlow/internal/models"
 )
 
 // NodeRegistry 节点注册器
 type NodeRegistry struct {
-	mu        sync.RWMutex
-	executors map[string]NodeExecutor
+	mu          sync.RWMutex
+	executors   map[string]NodeExecutor
 	definitions map[string]models.NodeDefinition
 }
 
@@ -26,7 +26,7 @@ type NodeExecutor interface {
 // NewNodeRegistry 创建新的节点注册器
 func NewNodeRegistry() *NodeRegistry {
 	return &NodeRegistry{
-		executors: make(map[string]NodeExecutor),
+		executors:   make(map[string]NodeExecutor),
 		definitions: make(map[string]models.NodeDefinition),
 	}
 }
@@ -35,10 +35,10 @@ func NewNodeRegistry() *NodeRegistry {
 func (r *NodeRegistry) Register(executor NodeExecutor) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	nodeType := executor.GetType()
 	r.executors[nodeType] = executor
-	
+
 	// 同时创建节点定义
 	r.definitions[nodeType] = models.NodeDefinition{
 		Type:        executor.GetType(),
@@ -54,7 +54,7 @@ func (r *NodeRegistry) Register(executor NodeExecutor) {
 func (r *NodeRegistry) RegisterDefinition(def models.NodeDefinition) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	r.definitions[def.Type] = def
 }
 
@@ -62,7 +62,7 @@ func (r *NodeRegistry) RegisterDefinition(def models.NodeDefinition) {
 func (r *NodeRegistry) GetExecutor(nodeType string) (NodeExecutor, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	executor, exists := r.executors[nodeType]
 	return executor, exists
 }
@@ -71,7 +71,7 @@ func (r *NodeRegistry) GetExecutor(nodeType string) (NodeExecutor, bool) {
 func (r *NodeRegistry) GetDefinition(nodeType string) (models.NodeDefinition, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	def, exists := r.definitions[nodeType]
 	return def, exists
 }
@@ -80,7 +80,7 @@ func (r *NodeRegistry) GetDefinition(nodeType string) (models.NodeDefinition, bo
 func (r *NodeRegistry) GetAllTypes() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	types := make([]string, 0, len(r.executors))
 	for nodeType := range r.executors {
 		types = append(types, nodeType)
@@ -92,7 +92,7 @@ func (r *NodeRegistry) GetAllTypes() []string {
 func (r *NodeRegistry) GetAllDefinitions() map[string]models.NodeDefinition {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	definitions := make(map[string]models.NodeDefinition)
 	for nodeType, def := range r.definitions {
 		definitions[nodeType] = def
@@ -104,7 +104,7 @@ func (r *NodeRegistry) GetAllDefinitions() map[string]models.NodeDefinition {
 func (r *NodeRegistry) GetByCategory(category string) []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	var types []string
 	for nodeType, executor := range r.executors {
 		if executor.GetCategory() == category {
@@ -118,7 +118,7 @@ func (r *NodeRegistry) GetByCategory(category string) []string {
 func (r *NodeRegistry) Unregister(nodeType string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	delete(r.executors, nodeType)
 	delete(r.definitions, nodeType)
 }
@@ -127,7 +127,7 @@ func (r *NodeRegistry) Unregister(nodeType string) {
 func (r *NodeRegistry) Clear() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	r.executors = make(map[string]NodeExecutor)
 	r.definitions = make(map[string]models.NodeDefinition)
 }
@@ -138,7 +138,7 @@ func (r *NodeRegistry) Validate(nodeType string, config map[string]any) error {
 	if !exists {
 		return fmt.Errorf("unknown node type: %s", nodeType)
 	}
-	
+
 	// 验证必需字段
 	for _, field := range def.Config {
 		if field.Required {
@@ -147,7 +147,7 @@ func (r *NodeRegistry) Validate(nodeType string, config map[string]any) error {
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -157,6 +157,6 @@ func (r *NodeRegistry) GetSchema(nodeType string) ([]models.FieldSchema, error) 
 	if !exists {
 		return nil, fmt.Errorf("unknown node type: %s", nodeType)
 	}
-	
+
 	return def.Config, nil
 }

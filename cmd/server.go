@@ -1,13 +1,13 @@
 package main
 
 import (
-	"RCAgent/config"
-	"RCAgent/internal/ctx"
-	"RCAgent/internal/middleware"
-	"RCAgent/internal/repos"
-	"RCAgent/internal/routes"
-	"RCAgent/internal/services"
-	"RCAgent/pkg/client"
+	"SREFlow/config"
+	"SREFlow/internal/ctx"
+	"SREFlow/internal/middleware"
+	"SREFlow/internal/repos"
+	"SREFlow/internal/routes"
+	"SREFlow/internal/services"
+	"SREFlow/pkg/client"
 	"context"
 	"fmt"
 	"log"

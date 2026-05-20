@@ -1,8 +1,8 @@
 package routes
 
 import (
-	"RCAgent/api"
-	"RCAgent/internal/middleware"
+	"SREFlow/api"
+	"SREFlow/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 )

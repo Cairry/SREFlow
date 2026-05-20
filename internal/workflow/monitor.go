@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"RCAgent/internal/models"
+	"SREFlow/internal/models"
 )
 
 // ExecutionMonitor 执行监控器
@@ -64,8 +64,8 @@ type EventData struct {
 	NodeID          string            `json:"node_id,omitempty"`
 	NodeType        string            `json:"node_type,omitempty"`
 	NodeTitle       string            `json:"node_title,omitempty"`
-	Outputs         map[string]string `json:"outputs,omitempty"`         // 字段统一为 string
-	NodeStates      map[string]string `json:"node_states,omitempty"`    // 节点状态快照
+	Outputs         map[string]string `json:"outputs,omitempty"`     // 字段统一为 string
+	NodeStates      map[string]string `json:"node_states,omitempty"` // 节点状态快照
 	TotalNodes      int               `json:"total_nodes,omitempty"`
 	CompletedNodes  int               `json:"completed_nodes,omitempty"`
 	Duration        float64           `json:"duration,omitempty"` // 总耗时(秒)
@@ -877,10 +877,12 @@ func (m *ExecutionMonitor) Clear() {
 
 // DefaultEventHandler 实现
 
-func (h *DefaultEventHandler) OnExecutionStarted(executionID string)                          {}
+func (h *DefaultEventHandler) OnExecutionStarted(executionID string)                              {}
 func (h *DefaultEventHandler) OnExecutionCompleted(executionID string, metrics *ExecutionMetrics) {}
-func (h *DefaultEventHandler) OnExecutionFailed(executionID string, metrics *ExecutionMetrics, err error) {}
-func (h *DefaultEventHandler) OnNodeStarted(executionID, nodeID, nodeType string)               {}
-func (h *DefaultEventHandler) OnNodeCompleted(executionID, nodeID string, result *models.NodeResult) {}
-func (h *DefaultEventHandler) OnNodeFailed(executionID, nodeID string, err error)               {}
-func (h *DefaultEventHandler) OnNodeRetry(executionID, nodeID string, attempt int, err error)   {}
+func (h *DefaultEventHandler) OnExecutionFailed(executionID string, metrics *ExecutionMetrics, err error) {
+}
+func (h *DefaultEventHandler) OnNodeStarted(executionID, nodeID, nodeType string) {}
+func (h *DefaultEventHandler) OnNodeCompleted(executionID, nodeID string, result *models.NodeResult) {
+}
+func (h *DefaultEventHandler) OnNodeFailed(executionID, nodeID string, err error)             {}
+func (h *DefaultEventHandler) OnNodeRetry(executionID, nodeID string, attempt int, err error) {}

@@ -1,9 +1,9 @@
 package services
 
 import (
-	"RCAgent/internal/ctx"
-	"RCAgent/internal/repos"
-	"RCAgent/internal/workflow"
+	"SREFlow/internal/ctx"
+	"SREFlow/internal/repos"
+	"SREFlow/internal/workflow"
 	"context"
 	"time"
 
@@ -11,11 +11,11 @@ import (
 )
 
 var (
-	Topology   TopologyService
-	Workflow   *NewWorkflowService
-	Workspace  *WorkspaceService
+	Topology    TopologyService
+	Workflow    *NewWorkflowService
+	Workspace   *WorkspaceService
 	Integration *IntegrationService
-	MCP        *MCPService
+	MCP         *MCPService
 )
 
 func Init(ctx *ctx.Context) {

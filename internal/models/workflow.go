@@ -9,22 +9,22 @@ import (
 
 // Workflow represents a workflow template
 type Workflow struct {
-	ID                string         `json:"id" gorm:"primaryKey"`
-	WorkspaceID       string         `json:"workspaceId" gorm:"type:varchar(36);index"`
-	Name              string         `json:"name" gorm:"not null"`
-	Description       string         `json:"description"`
-	Nodes             string         `json:"nodes"` // JSON array as string
-	Edges             string         `json:"edges"` // JSON array as string
-	CurrentVersionNum int            `json:"currentVersionNum" gorm:"default:1"`   // 当前版本号
-	CurrentContentHash string        `json:"currentContentHash" gorm:"type:varchar(64)"` // 当前内容哈希
-	CreatedAt         time.Time      `json:"createdAt"`
-	UpdatedAt         time.Time      `json:"updatedAt"`
-	DeletedAt         gorm.DeletedAt `json:"deletedAt,omitempty" gorm:"index"`
+	ID                 string         `json:"id" gorm:"primaryKey"`
+	WorkspaceID        string         `json:"workspaceId" gorm:"type:varchar(36);index"`
+	Name               string         `json:"name" gorm:"not null"`
+	Description        string         `json:"description"`
+	Nodes              string         `json:"nodes"`                                      // JSON array as string
+	Edges              string         `json:"edges"`                                      // JSON array as string
+	CurrentVersionNum  int            `json:"currentVersionNum" gorm:"default:1"`         // 当前版本号
+	CurrentContentHash string         `json:"currentContentHash" gorm:"type:varchar(64)"` // 当前内容哈希
+	CreatedAt          time.Time      `json:"createdAt"`
+	UpdatedAt          time.Time      `json:"updatedAt"`
+	DeletedAt          gorm.DeletedAt `json:"deletedAt,omitempty" gorm:"index"`
 }
 
 // TableName specifies the table name for Workflow model
 func (Workflow) TableName() string {
-	return "workflows"
+	return "v_workflows"
 }
 
 // Port defines an input or output port for a node type
@@ -78,18 +78,18 @@ type NodeResult struct {
 
 // WorkflowExecution represents a single workflow run
 type WorkflowExecution struct {
-	ID                 string                 `json:"id"`
-	WorkflowID         string                 `json:"workflowId"`
-	WorkflowName       string                 `json:"workflowName"`
-	Status             string                 `json:"status"` // "running", "completed", "failed"
-	StartedAt          int64                  `json:"startedAt"`
-	FinishedAt         int64                  `json:"finishedAt"`
-	NodeResults        map[string]*NodeResult `json:"nodeResults"`    // nodeId -> result (内部使用)
-	RestructuredOutput map[string]map[string]string `json:"outputs"`   // nodeId -> field -> string
-	Variables          map[string]any         `json:"variables"`      // final workflow variables
-	RunningNodes       []string               `json:"runningNodes"`   // 当前正在运行的节点ID
-	CompletedNodes     []string               `json:"completedNodes"` // 已完成的节点ID
-	FailedNodes        []string               `json:"failedNodes"`    // 失败的节点ID
+	ID                 string                       `json:"id"`
+	WorkflowID         string                       `json:"workflowId"`
+	WorkflowName       string                       `json:"workflowName"`
+	Status             string                       `json:"status"` // "running", "completed", "failed"
+	StartedAt          int64                        `json:"startedAt"`
+	FinishedAt         int64                        `json:"finishedAt"`
+	NodeResults        map[string]*NodeResult       `json:"nodeResults"`    // nodeId -> result (内部使用)
+	RestructuredOutput map[string]map[string]string `json:"outputs"`        // nodeId -> field -> string
+	Variables          map[string]any               `json:"variables"`      // final workflow variables
+	RunningNodes       []string                     `json:"runningNodes"`   // 当前正在运行的节点ID
+	CompletedNodes     []string                     `json:"completedNodes"` // 已完成的节点ID
+	FailedNodes        []string                     `json:"failedNodes"`    // 失败的节点ID
 }
 
 // WorkflowExecutionRecord 用于数据库存储的执行记录
@@ -123,5 +123,5 @@ type WorkflowVersion struct {
 
 // TableName specifies the table name for WorkflowVersion model
 func (WorkflowVersion) TableName() string {
-	return "workflow_versions"
+	return "v_workflow_versions"
 }

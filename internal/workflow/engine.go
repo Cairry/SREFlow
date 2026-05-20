@@ -6,20 +6,20 @@ import (
 	"fmt"
 	"time"
 
-	"RCAgent/internal/models"
-	"RCAgent/internal/repos"
-	"RCAgent/pkg/tools"
+	"SREFlow/internal/models"
+	"SREFlow/internal/repos"
+	"SREFlow/pkg/tools"
 )
 
 // WorkflowEngine 核心工作流引擎
 type WorkflowEngine struct {
-	registry       *NodeRegistry
-	executor       *WorkflowExecutor
-	monitor        *ExecutionMonitor
-	stateManager   *StateManager
-	retryPolicy    *RetryPolicy
+	registry        *NodeRegistry
+	executor        *WorkflowExecutor
+	monitor         *ExecutionMonitor
+	stateManager    *StateManager
+	retryPolicy     *RetryPolicy
 	integrationRepo repos.IntegrationRepoInter
-	mcpRepo        repos.MCPServerRepoInter
+	mcpRepo         repos.MCPServerRepoInter
 }
 
 // EngineConfig 引擎配置
@@ -55,13 +55,13 @@ func NewWorkflowEngine(config *EngineConfig, integrationRepo repos.IntegrationRe
 	retryPolicy := NewRetryPolicy(config)
 
 	return &WorkflowEngine{
-		registry:       registry,
-		executor:       executor,
-		monitor:        monitor,
-		stateManager:   stateManager,
-		retryPolicy:    retryPolicy,
+		registry:        registry,
+		executor:        executor,
+		monitor:         monitor,
+		stateManager:    stateManager,
+		retryPolicy:     retryPolicy,
 		integrationRepo: integrationRepo,
-		mcpRepo:        mcpRepo,
+		mcpRepo:         mcpRepo,
 	}
 }
 

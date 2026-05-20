@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"RCAgent/internal/models"
+	"SREFlow/internal/models"
 )
 
 // WebhookConfig webhook配置
@@ -106,10 +106,10 @@ func (e *OutputExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContex
 
 // WebhookResult webhook执行结果
 type WebhookResult struct {
-	URL            string
-	RequestBody    string
-	StatusCode     int
-	ResponseBody   string
+	URL             string
+	RequestBody     string
+	StatusCode      int
+	ResponseBody    string
 	ResponseHeaders map[string]string
 }
 

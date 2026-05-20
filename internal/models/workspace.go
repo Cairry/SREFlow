@@ -17,5 +17,5 @@ type Workspace struct {
 
 // TableName 指定表名
 func (Workspace) TableName() string {
-	return "workspaces"
+	return "v_workspaces"
 }

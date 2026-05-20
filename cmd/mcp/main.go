@@ -33,7 +33,7 @@ func main() {
 	flag.Parse()
 
 	mcpSrv := NewServer(Config{
-		Name:    "RCAgent",
+		Name:    "SREFlow",
 		Version: "1.0.0",
 	})
 

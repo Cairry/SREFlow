@@ -1,8 +1,8 @@
 package workflow
 
 import (
-	"RCAgent/internal/repos"
-	"RCAgent/internal/workflow/nodes"
+	"SREFlow/internal/repos"
+	"SREFlow/internal/workflow/nodes"
 )
 
 // BootstrapNodeRegistry 初始化节点注册器

@@ -1,4 +1,4 @@
-module RCAgent
+module SREFlow
 
 go 1.26.0
 

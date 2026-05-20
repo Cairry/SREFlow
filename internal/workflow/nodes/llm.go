@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"RCAgent/internal/models"
+	"SREFlow/internal/models"
 )
 
 // OpenAI API 请求结构
@@ -147,7 +147,7 @@ func (e *LLMExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext) 
 	// 设置请求头
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("User-Agent", "RCAgent/1.0")
+	req.Header.Set("User-Agent", "SREFlow/1.0")
 
 	log.Printf("[LLM] API Key: %s...", apiKey[:8])
 

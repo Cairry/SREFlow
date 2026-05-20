@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
-	"RCAgent/internal/models"
-	"RCAgent/internal/repos"
-	"RCAgent/internal/types"
-	"RCAgent/internal/workflow"
-	"RCAgent/pkg/tools"
+	"SREFlow/internal/models"
+	"SREFlow/internal/repos"
+	"SREFlow/internal/types"
+	"SREFlow/internal/workflow"
+	"SREFlow/pkg/tools"
 )
 
 // injectStartNodeInput 将 input 参数注入到 Start 节点的 text 字段
@@ -962,9 +962,9 @@ func (s *NewWorkflowService) DeleteVersion(workflowId string, versionNum int) (d
 	}
 
 	return map[string]interface{}{
-		"message":     "version deleted successfully",
-		"workflowId":  workflowId,
-		"versionNum":  versionNum,
+		"message":    "version deleted successfully",
+		"workflowId": workflowId,
+		"versionNum": versionNum,
 	}, nil
 }
 
@@ -980,13 +980,13 @@ func (s *NewWorkflowService) SetRelease(workflowId string, versionNum int) (data
 	}
 
 	return map[string]interface{}{
-		"message":          "version set as release successfully",
-		"workflowId":       workflowId,
-		"versionNum":       versionNum,
-		"name":             version.Name,
-		"description":      version.Description,
+		"message":           "version set as release successfully",
+		"workflowId":        workflowId,
+		"versionNum":        versionNum,
+		"name":              version.Name,
+		"description":       version.Description,
 		"currentVersionNum": version.Version,
-		"contentHash":      version.Hash,
+		"contentHash":       version.Hash,
 	}, nil
 }
 
@@ -1002,9 +1002,9 @@ func (s *NewWorkflowService) CancelRelease(workflowId string, versionNum int) (d
 	}
 
 	return map[string]interface{}{
-		"message":          "version release cancelled successfully",
-		"workflowId":       workflowId,
-		"versionNum":       versionNum,
+		"message":           "version release cancelled successfully",
+		"workflowId":        workflowId,
+		"versionNum":        versionNum,
 		"currentVersionNum": version.Version,
 	}, nil
 }

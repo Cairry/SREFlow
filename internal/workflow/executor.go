@@ -9,30 +9,30 @@ import (
 	"sync"
 	"time"
 
-	"RCAgent/internal/models"
-	"RCAgent/internal/repos"
+	"SREFlow/internal/models"
+	"SREFlow/internal/repos"
 )
 
 // WorkflowExecutor 工作流执行器 - 基于树结构的层级执行模型
 // 同级的多个节点必须全部完成执行后，才处理下一级节点
 type WorkflowExecutor struct {
-	registry       *NodeRegistry
-	config         *EngineConfig
-	retryPolicy    *RetryPolicy
-	monitor        *ExecutionMonitor
-	stateManager   *StateManager
+	registry        *NodeRegistry
+	config          *EngineConfig
+	retryPolicy     *RetryPolicy
+	monitor         *ExecutionMonitor
+	stateManager    *StateManager
 	integrationRepo repos.IntegrationRepoInter
-	executionMutex sync.Mutex // 保护执行上下文的并发访问
+	executionMutex  sync.Mutex // 保护执行上下文的并发访问
 }
 
 // NewWorkflowExecutor 创建新的工作流执行器
 func NewWorkflowExecutor(registry *NodeRegistry, config *EngineConfig, stateManager *StateManager, monitor *ExecutionMonitor, integrationRepo repos.IntegrationRepoInter) *WorkflowExecutor {
 	return &WorkflowExecutor{
-		registry:       registry,
-		config:         config,
-		retryPolicy:    NewRetryPolicy(config),
-		monitor:        monitor,
-		stateManager:   stateManager,
+		registry:        registry,
+		config:          config,
+		retryPolicy:     NewRetryPolicy(config),
+		monitor:         monitor,
+		stateManager:    stateManager,
 		integrationRepo: integrationRepo,
 	}
 }
@@ -50,15 +50,15 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, execution *models.Workfl
 
 	// 创建执行上下文
 	execCtx := &ExecutionContext{
-		Context:        ctx,
-		Execution:      execution,
-		Graph:          execGraph,
-		Registry:       e.registry,
-		Config:         e.config,
-		RetryPolicy:    e.retryPolicy,
-		Monitor:        e.monitor,
-		StateManager:   e.stateManager,
-		WorkspaceID:    workspaceID,
+		Context:         ctx,
+		Execution:       execution,
+		Graph:           execGraph,
+		Registry:        e.registry,
+		Config:          e.config,
+		RetryPolicy:     e.retryPolicy,
+		Monitor:         e.monitor,
+		StateManager:    e.stateManager,
+		WorkspaceID:     workspaceID,
 		IntegrationRepo: e.integrationRepo,
 	}
 
@@ -68,15 +68,15 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, execution *models.Workfl
 
 // ExecutionContext 执行上下文
 type ExecutionContext struct {
-	Context        context.Context
-	Execution      *models.WorkflowExecution
-	Graph          *ExecutionGraph
-	Registry       *NodeRegistry
-	Config         *EngineConfig
-	RetryPolicy    *RetryPolicy
-	Monitor        *ExecutionMonitor
-	StateManager   *StateManager
-	WorkspaceID    string
+	Context         context.Context
+	Execution       *models.WorkflowExecution
+	Graph           *ExecutionGraph
+	Registry        *NodeRegistry
+	Config          *EngineConfig
+	RetryPolicy     *RetryPolicy
+	Monitor         *ExecutionMonitor
+	StateManager    *StateManager
+	WorkspaceID     string
 	IntegrationRepo repos.IntegrationRepoInter
 }
 
@@ -737,31 +737,31 @@ func (e *WorkflowExecutor) mergeKubeConfig(config map[string]any, integration *m
 }
 
 // executeSingleNode 执行单个节点
- 
- // nodeTypeToIntegrationType 将工作流节点类型映射到 Integration 类型
- func (e *WorkflowExecutor) nodeTypeToIntegrationType(nodeType string) models.IntegrationType {
- 	switch nodeType {
- 	case "LLM":
- 		return models.IntegrationTypeLLM
- 	case "Prometheus":
- 		return models.IntegrationTypePrometheus
- 	case "Jaeger":
- 		return models.IntegrationTypeJaeger
- 	case "Elasticsearch":
- 		return models.IntegrationTypeElasticsearch
- 	case "Loki":
- 		return models.IntegrationTypeLoki
- 	case "ClickHouse":
- 		return models.IntegrationTypeClickhouse
- 	case "SSH":
- 		return models.IntegrationTypeSSHAuth
- 	case "Kubernetes":
- 		return models.IntegrationTypeKubernetes
- 	default:
- 		return ""
- 	}
- }
- 
+
+// nodeTypeToIntegrationType 将工作流节点类型映射到 Integration 类型
+func (e *WorkflowExecutor) nodeTypeToIntegrationType(nodeType string) models.IntegrationType {
+	switch nodeType {
+	case "LLM":
+		return models.IntegrationTypeLLM
+	case "Prometheus":
+		return models.IntegrationTypePrometheus
+	case "Jaeger":
+		return models.IntegrationTypeJaeger
+	case "Elasticsearch":
+		return models.IntegrationTypeElasticsearch
+	case "Loki":
+		return models.IntegrationTypeLoki
+	case "ClickHouse":
+		return models.IntegrationTypeClickhouse
+	case "SSH":
+		return models.IntegrationTypeSSHAuth
+	case "Kubernetes":
+		return models.IntegrationTypeKubernetes
+	default:
+		return ""
+	}
+}
+
 func (e *WorkflowExecutor) executeSingleNode(ctx *ExecutionContext, nodeCtx *models.NodeContext) (*models.NodeResult, error) {
 	executor, exists := ctx.Registry.GetExecutor(nodeCtx.NodeType)
 	if !exists {

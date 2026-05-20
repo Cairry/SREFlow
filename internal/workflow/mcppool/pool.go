@@ -12,7 +12,7 @@ import (
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"RCAgent/internal/models"
+	"SREFlow/internal/models"
 )
 
 // MCPPool manages cached mcp-go/client.Client instances by server ID.
@@ -134,7 +134,7 @@ func (p *MCPPool) createClient(ctx context.Context, serverURL string, serverType
 		Params: mcp.InitializeParams{
 			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
 			ClientInfo: mcp.Implementation{
-				Name:    "RCAgent",
+				Name:    "SREFlow",
 				Version: "1.0.0",
 			},
 		},

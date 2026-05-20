@@ -1,7 +1,7 @@
 package nodes
 
 import (
-	"RCAgent/internal/models"
+	"SREFlow/internal/models"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -62,7 +62,7 @@ func ExecutePrometheus(ctx context.Context, nc *models.NodeContext) (*models.Nod
 
 	// 设置请求头
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "RCAgent/1.0")
+	req.Header.Set("User-Agent", "SREFlow/1.0")
 
 	// 添加数据源的 headers
 	if headers, ok := nc.Config["headers"].(map[string]string); ok {

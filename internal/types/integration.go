@@ -1,18 +1,18 @@
 package types
 
 import (
-	"RCAgent/internal/ctx"
-	"RCAgent/internal/models"
+	"SREFlow/internal/ctx"
+	"SREFlow/internal/models"
 	"fmt"
 )
 
 // RequestUpdateIntegration 更新集成请求
 type RequestUpdateIntegration struct {
-	ID          string             `json:"id"`
-	Name        string             `json:"name,omitempty"`
-	HTTPConfig  *models.HTTPConfig `json:"httpConfig,omitempty"`
-	AIConfig    *models.AIConfig   `json:"aiConfig,omitempty"`
-	KubeConfig  *models.KubeConfig `json:"kubeConfig,omitempty"`
+	ID         string             `json:"id"`
+	Name       string             `json:"name,omitempty"`
+	HTTPConfig *models.HTTPConfig `json:"httpConfig,omitempty"`
+	AIConfig   *models.AIConfig   `json:"aiConfig,omitempty"`
+	KubeConfig *models.KubeConfig `json:"kubeConfig,omitempty"`
 }
 
 func (r *RequestUpdateIntegration) Valid(c *ctx.Context) error {

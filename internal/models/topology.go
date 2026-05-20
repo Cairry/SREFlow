@@ -28,7 +28,7 @@ type TopologyList struct {
 }
 
 func (t *Topology) TableName() string {
-	return "w8t_topology"
+	return "v_topology"
 }
 
 type Node struct {

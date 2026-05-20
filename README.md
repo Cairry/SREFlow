@@ -3,7 +3,7 @@
 
 ## 📌 目录结构
 ```
-RCAgent/
+SREFlow/
 ├── api/                # API 层，接口定义与实现
 │   ├── service.go
 │   └── user.go

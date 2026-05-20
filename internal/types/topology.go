@@ -1,6 +1,6 @@
 package types
 
-import "RCAgent/internal/models"
+import "SREFlow/internal/models"
 
 // RequestTopologyCreate 请求创建拓扑图
 type RequestTopologyCreate struct {

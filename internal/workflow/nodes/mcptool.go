@@ -8,9 +8,9 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"RCAgent/internal/models"
-	"RCAgent/internal/repos"
-	"RCAgent/internal/workflow/mcppool"
+	"SREFlow/internal/models"
+	"SREFlow/internal/repos"
+	"SREFlow/internal/workflow/mcppool"
 )
 
 // MCPToolExecutor MCP工具执行器

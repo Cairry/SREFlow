@@ -1,6 +1,6 @@
 package nodes
 
-import "RCAgent/internal/models"
+import "SREFlow/internal/models"
 
 // Common utility functions shared across all nodes
 

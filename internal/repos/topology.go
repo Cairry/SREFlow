@@ -1,7 +1,7 @@
 package repos
 
 import (
-	"RCAgent/internal/models"
+	"SREFlow/internal/models"
 	"context"
 
 	"gorm.io/gorm"

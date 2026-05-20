@@ -7,8 +7,8 @@ import (
 	"log"
 	"time"
 
-	"RCAgent/internal/models"
-	"RCAgent/internal/repos"
+	"SREFlow/internal/models"
+	"SREFlow/internal/repos"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -102,8 +102,8 @@ func executePodStatus(ctx context.Context, clientset *kubernetes.Clientset, name
 		log.Printf("[Kubernetes] Listed %d pods in namespace %s", len(podStatuses), namespace)
 
 		return newResult(map[string]any{
-			"pods":   podStatuses,
-			"count":  len(podStatuses),
+			"pods":      podStatuses,
+			"count":     len(podStatuses),
 			"namespace": namespace,
 		}), nil
 	}
@@ -117,7 +117,7 @@ func executePodStatus(ctx context.Context, clientset *kubernetes.Clientset, name
 	log.Printf("[Kubernetes] Got pod %s/%s status", namespace, pod)
 
 	return newResult(map[string]any{
-		"pod":      formatPodStatus(p),
+		"pod":       formatPodStatus(p),
 		"namespace": namespace,
 	}), nil
 }

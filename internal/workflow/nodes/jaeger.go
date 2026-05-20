@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"RCAgent/internal/models"
+	"SREFlow/internal/models"
 )
 
 // JaegerExecutor Jaeger追踪执行器
@@ -78,7 +78,7 @@ func (e *JaegerExecutor) Execute(ctx context.Context, nc *models.NodeContext) (*
 
 	// 设置请求头
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "RCAgent/1.0")
+	req.Header.Set("User-Agent", "SREFlow/1.0")
 
 	// 添加数据源的 headers
 	if headers, ok := nc.Config["headers"].(map[string]string); ok {

@@ -10,11 +10,11 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"RCAgent/internal/models"
-	"RCAgent/internal/repos"
-	"RCAgent/internal/types"
-	"RCAgent/internal/workflow/mcppool"
-	"RCAgent/pkg/tools"
+	"SREFlow/internal/models"
+	"SREFlow/internal/repos"
+	"SREFlow/internal/types"
+	"SREFlow/internal/workflow/mcppool"
+	"SREFlow/pkg/tools"
 )
 
 // MCPService MCP服务器服务

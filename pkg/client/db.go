@@ -1,8 +1,8 @@
 package client
 
 import (
-	"RCAgent/config"
-	"RCAgent/internal/models"
+	"SREFlow/config"
+	"SREFlow/internal/models"
 	"context"
 	"fmt"
 	"os"

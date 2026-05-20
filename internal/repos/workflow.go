@@ -1,7 +1,7 @@
 package repos
 
 import (
-	"RCAgent/internal/models"
+	"SREFlow/internal/models"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -38,7 +38,7 @@ type (
 		GetMaxVersion(workflowID string) (int, error)
 		Delete(workflowID string, version int) error
 		DeleteByWorkflowID(workflowID string) error
-		SetRelease(workflowID string, version int) error  // 标记为 Release（同时取消其他）
+		SetRelease(workflowID string, version int) error    // 标记为 Release（同时取消其他）
 		CancelRelease(workflowID string, version int) error // 取消指定版本的 Release
 	}
 

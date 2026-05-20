@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"RCAgent/internal/models"
+	"SREFlow/internal/models"
 )
 
 // ClickHouseExecutor ClickHouse SQL执行器
@@ -86,7 +86,7 @@ func (e *ClickHouseExecutor) Execute(ctx context.Context, nodeCtx *models.NodeCo
 	// 设置请求头
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "RCAgent/1.0")
+	req.Header.Set("User-Agent", "SREFlow/1.0")
 
 	// 添加数据源的 headers
 	if headers, ok := nodeCtx.Config["headers"].(map[string]string); ok {
