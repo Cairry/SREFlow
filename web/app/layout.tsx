@@ -12,7 +12,12 @@ const _geistMono = Geist_Mono({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'SREFlow AI',
+  icons: {
+    icon: '/icon.png',
+  },
 }
+
+import Loading from "@/components/loading-screen"
 
 export default function RootLayout({
   children,
@@ -28,6 +33,7 @@ export default function RootLayout({
           enableSystem={false}
           storageKey="flowforge-theme"
         >
+          <Loading />
           <Navigation />
           {children}
           <Toaster />

@@ -486,14 +486,15 @@ export default function MCPToolsPage() {
               />
             </div>
           </div>
-          <Button
-            className="gap-2"
-            onClick={() => setCreateOpen(true)}
-            disabled={!workspaceId}
-          >
-            <Plus className="w-4" />
-            Add Server
-          </Button>
+          {workspaceId && (
+            <Button
+              className="gap-2"
+              onClick={() => setCreateOpen(true)}
+            >
+              <Plus className="w-4" />
+              Add Server
+            </Button>
+          )}
         </div>
 
         {/* Content */}
@@ -505,7 +506,6 @@ export default function MCPToolsPage() {
           <div className="text-center py-12">
             <Puzzle className="h-12 w-12 mx-auto text-workflow-text-muted mb-4" />
             <h3 className="text-lg font-medium text-workflow-text">No MCP servers found</h3>
-            <p className="text-workflow-text-muted mt-2">Add an MCP server to get started</p>
           </div>
         ) : (
           <div className="space-y-4">

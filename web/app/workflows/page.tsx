@@ -297,14 +297,15 @@ export default function WorkflowsPage() {
             />
           </div>
 
-          <Button
-            className="gap-2"
-            onClick={() => setShowCreateDialog(true)}
-            disabled={!currentWorkspaceId}
-          >
-            <Plus className="w-4" />
-            Create
-          </Button>
+          {currentWorkspaceId && (
+            <Button
+              className="gap-2"
+              onClick={() => setShowCreateDialog(true)}
+            >
+              <Plus className="w-4" />
+              Create
+            </Button>
+          )}
 
           <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
             <DialogContent>

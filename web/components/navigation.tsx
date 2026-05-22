@@ -200,7 +200,7 @@ export function Navigation() {
               <>
                 <Link href="/" className="flex items-center space-x-2">
                   <Image
-                    src="/flowforge-logo.png"
+                    src="/logo.png"
                     alt="SREFlow AI"
                     width={28}
                     height={28}
