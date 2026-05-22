@@ -24,3 +24,7 @@ web/dist-ssr
 *.sln
 *.sw?
 
+
+# License / key files (secrets – never commit)
+config/license.pem
+config/license.lic

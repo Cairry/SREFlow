@@ -16,29 +16,6 @@ Database:
   # SQLite 配置 (当 type 为 sqlite 时使用)
   path: data/rcaagent.db
 
-Redis:
-  host: w8t-redis
-  port: 6379
-  password: ""
-  database: 0
-
-Jwt:
-  # 失效时间
-  expire: 18000
-
-mcp:
-  services:
-    prometheus:
-      name: "prometheus"
-      url: "http://localhost:9090"
-      description: "Prometheus 监控工具"
-      timeout: "30s"
-      enabled: true
-
-skill:
-  # skill文件目录，支持绝对路径和相对路径
-  dir: "./agent/skills"
-  # 是否启用skill
-  enabled: true
-  # 默认使用的skill名称（可选）
-  default: "sre-fault-diagnosis-and-rca"
+license:
+  # license文件路径
+  path: "config/license.lic"

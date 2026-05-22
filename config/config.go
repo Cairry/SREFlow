@@ -25,6 +25,7 @@ type Config struct {
 	MCP      *MCPConfig      `json:"mcp"`
 	Skill    *SkillConfig    `json:"skill"`
 	Workflow *WorkflowConfig `json:"workflow"`
+	License  LicenseConfig   `json:"license"`
 }
 
 type Server struct {
@@ -74,6 +75,11 @@ type MCPServer struct {
 	Timeout     time.Duration     `json:"timeout"`
 	Enabled     bool              `json:"enabled"`
 	Description string            `json:"description"`
+}
+
+// LicenseConfig License配置
+type LicenseConfig struct {
+	Path string `json:"path"` // license文件路径
 }
 
 var (
