@@ -50,7 +50,7 @@ type NodeDef = {
 const NODE_DEFINITIONS: NodeDef[] = [
   // Integration
   { type: "Prometheus", label: "Prometheus", description: "Query metrics with PromQL", icon: <Activity className="w-4 h-4" />, category: "integration" },
-  { type: "Jaeger", label: "Jaeger", description: "Query distributed traces", icon: <Search className="w-4 h-4" />, category: "integration" },
+  { type: "Jaeger", label: "Jaeger", description: "Search traces with tags", icon: <Search className="w-4 h-4" />, category: "integration" },
   { type: "Elasticsearch", label: "Elasticsearch", description: "Search and analyze logs", icon: <Search className="w-4 h-4" />, category: "integration" },
   { type: "Loki", label: "Loki", description: "Query logs with LogQL", icon: <Search className="w-4 h-4" />, category: "integration" },
   { type: "ClickHouse", label: "ClickHouse", description: "Execute SQL queries", icon: <BarChart3 className="w-4 h-4" />, category: "integration" },

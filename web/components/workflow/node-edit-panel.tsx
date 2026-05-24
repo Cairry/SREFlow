@@ -458,36 +458,23 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
       {/* Jaeger Node */}
       {node.type === "Jaeger" && (
         <>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelClass}>Service</label>
-              <input
-                type="text"
-                value={(node.data as any).service || ""}
-                onChange={(e) => handleChange("service", e.target.value)}
-                placeholder="service-name"
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Operation</label>
-              <input
-                type="text"
-                value={(node.data as any).operation || ""}
-                onChange={(e) => handleChange("operation", e.target.value)}
-                placeholder="operation-name"
-                className={inputClass}
-              />
-            </div>
-          </div>
           <div>
-            <label className={labelClass}>Trace ID</label>
+            <label className={labelClass}>Service</label>
             <input
               type="text"
-              value={(node.data as any).traceId || ""}
-              onChange={(e) => handleChange("traceId", e.target.value)}
-              placeholder="specific-trace-id"
+              value={(node.data as any).service || ""}
+              onChange={(e) => handleChange("service", e.target.value)}
+              placeholder="service-name"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Tags</label>
+            <input
+              type="text"
+              value={(node.data as any).tags || ""}
+              onChange={(e) => handleChange("tags", e.target.value)}
+              placeholder="http.status_code=5.*"
               className={inputClass}
             />
           </div>

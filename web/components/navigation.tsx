@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
-import { Workflow, Zap, Sun, Moon, Monitor, Plus, LayoutGrid, Trash2, Edit2, X, Database, ArrowLeft, Puzzle } from "lucide-react";
+import { Workflow, Zap, Sun, Moon, Monitor, Plus, LayoutGrid, Trash2, Edit2, X, Database, ArrowLeft, Puzzle, HelpCircle } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useState, useEffect } from "react";
 import {
@@ -30,6 +30,7 @@ const navigation = [
   { name: "Workflows", href: "/workflows", icon: Workflow },
   { name: "Integrations", href: "/integrations", icon: Database },
   { name: "MCP Tools", href: "/mcp-tools", icon: Puzzle },
+  { name: "Help", href: "/help", icon: HelpCircle },
 ];
 
 const WORKSPACE_STORAGE_KEY = "flowforge-current-workspace-id";
@@ -238,7 +239,7 @@ export function Navigation() {
           {/* Right side - Workspace Selector and Theme Toggle */}
           <div className="flex items-center gap-3">
             {/* Workspace Selector - Only show on workflows/integrations list pages, not in workflow editor */}
-            {!loading && !isWorkflowEditor && (pathname === "/workflows" || pathname === "/integrations" || pathname === "/mcp-tools") && (
+            {!loading && !isWorkflowEditor && (pathname === "/workflows" || pathname === "/integrations" || pathname === "/mcp-tools" || pathname === "/help") && (
               <div className="flex items-center">
                 <LayoutGrid className="h-4 w-4 mr-2 text-muted-foreground" />
                 {workspaces.length === 0 ? (

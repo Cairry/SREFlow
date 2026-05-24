@@ -27,8 +27,7 @@ export interface PrometheusNodeData extends BaseNodeData {
 export interface JaegerNodeData extends BaseNodeData {
   jaegerUrl: string;
   service?: string;
-  operation?: string;
-  traceId?: string;
+  tags?: string;
   timeRange?: string;
   limit?: number;
 }

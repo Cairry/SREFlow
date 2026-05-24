@@ -21,7 +21,7 @@ function JaegerNodeComponent({ data, selected, ...props }: NodeProps) {
           Jaeger
         </div>
         <div className="text-xs text-workflow-text-subtle font-mono">
-          {nodeData.service || 'service'} / {nodeData.operation || 'operation'}
+          {nodeData.service || 'service'}{nodeData.tags ? ` | ${nodeData.tags}` : ''}
         </div>
       </div>
     </BaseNode>

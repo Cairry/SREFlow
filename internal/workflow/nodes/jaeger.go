@@ -39,21 +39,21 @@ func (e *JaegerExecutor) Execute(ctx context.Context, nc *models.NodeContext) (*
 	}
 
 	service := getStr(nc.Config, "service", "")
-	operation := getStr(nc.Config, "operation", "")
+	tags := getStr(nc.Config, "tags", "")
 	limit := getInt(nc.Config, "limit", 100)
 	startTime := getStr(nc.Config, "startTime", "")
 	endTime := getStr(nc.Config, "endTime", "")
 	timeout := getInt(nc.Config, "timeout", 30)
 
-	log.Printf("[Jaeger] Querying %s for service: %s, operation: %s", jaegerURL, service, operation)
+	log.Printf("[Jaeger] Querying %s for service: %s, tags: %s", jaegerURL, service, tags)
 
 	// 构建查询参数
 	params := url.Values{}
 	if service != "" {
 		params.Add("service", service)
 	}
-	if operation != "" {
-		params.Add("operation", operation)
+	if tags != "" {
+		params.Add("tags", tags)
 	}
 	if limit > 0 {
 		params.Add("limit", strconv.Itoa(limit))
