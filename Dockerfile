@@ -8,12 +8,12 @@ WORKDIR /root
 
 COPY . /root
 
-RUN CGO_ENABLED=0 go build -o Zeus . \
-    && chmod +x Zeus
+RUN CGO_ENABLED=0 go build -o sreflow . \
+    && chmod +x sreflow
 
 FROM alpine:3.19
 
-COPY --from=builder /root/Zeus /app/Zeus
+COPY --from=builder /root/sreflow /app/sreflow
 
 RUN sed -i "s/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g" /etc/apk/repositories \
     && apk upgrade && apk add --no-cache --virtual .build-deps \
@@ -21,4 +21,4 @@ RUN sed -i "s/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g" /etc/apk/repositories
 
 WORKDIR /app
 
-ENTRYPOINT ["/app/Zeus"]
+ENTRYPOINT ["/app/sreflow"]
