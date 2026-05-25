@@ -1,4 +1,4 @@
-const API_BASE_URL_MCP = process.env.API_BASE_URL || "http://localhost:9001";
+const API_BASE_URL_MCP = process.env.API_BASE_URL || "";
 
 export interface MCPServerTool {
   name: string;
