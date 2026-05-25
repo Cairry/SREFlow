@@ -1,5 +1,5 @@
 # Stage 1: Build frontend
-FROM docker.1ms.run/node:22-alpine AS frontend-builder
+FROM docker.1ms.run/library/node:22-alpine AS frontend-builder
 
 RUN corepack enable && corepack prepare yarn@latest --activate
 
@@ -10,7 +10,7 @@ COPY web/ ./
 RUN yarn install && yarn build
 
 # Stage 2: Build backend
-FROM docker.1ms.run/golang:1.26.0 AS backend-builder
+FROM docker.1ms.run/library/golang:1.26.0 AS backend-builder
 
 ENV GOPROXY=https://goproxy.cn,direct
 
@@ -22,7 +22,7 @@ RUN CGO_ENABLED=0 go build -o sreflow ./cmd/server.go \
     && chmod +x sreflow
 
 # Stage 3: Production image
-FROM docker.1ms.run/node:22-alpine
+FROM docker.1ms.run/library/node:22-alpine
 
 WORKDIR /app
 
