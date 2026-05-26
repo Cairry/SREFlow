@@ -120,6 +120,9 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
   const sshCommandRef = useRef<HTMLTextAreaElement>(null);
   const sshHostRef = useRef<HTMLInputElement>(null);
   const sshPortRef = useRef<HTMLInputElement>(null);
+  const jaegerServiceRef = useRef<HTMLInputElement>(null);
+  const jaegerTagsRef = useRef<HTMLInputElement>(null);
+  const esIndexRef = useRef<HTMLInputElement>(null);
 
   useVariablePickerShortcuts(promptRef, () => setActivePicker(activePicker === "prompt" ? null : "prompt"));
   useVariablePickerShortcuts(systemPromptRef, () => setActivePicker(activePicker === "systemPrompt" ? null : "systemPrompt"));
@@ -133,6 +136,9 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
   useVariablePickerShortcuts(sshCommandRef, () => setActivePicker(activePicker === "sshCommand" ? null : "sshCommand"));
   useVariablePickerShortcuts(sshHostRef, () => setActiveTextPicker(activeTextPicker === "sshHost" ? null : "sshHost"));
   useVariablePickerShortcuts(sshPortRef, () => setActiveTextPicker(activeTextPicker === "sshPort" ? null : "sshPort"));
+  useVariablePickerShortcuts(jaegerServiceRef, () => setActiveTextPicker(activeTextPicker === "jaegerService" ? null : "jaegerService"));
+  useVariablePickerShortcuts(jaegerTagsRef, () => setActiveTextPicker(activeTextPicker === "jaegerTags" ? null : "jaegerTags"));
+  useVariablePickerShortcuts(esIndexRef, () => setActiveTextPicker(activeTextPicker === "esIndex" ? null : "esIndex"));
 
   const insertVariable = (pickerKey: string, variableRef: string) => {
     if (pickerKey === "condition") {
@@ -198,6 +204,9 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
     const refMap: Record<string, React.RefObject<HTMLInputElement | null>> = {
       sshHost: sshHostRef,
       sshPort: sshPortRef,
+      jaegerService: jaegerServiceRef,
+      jaegerTags: jaegerTagsRef,
+      esIndex: esIndexRef,
     };
     const inputRef = refMap[pickerKey];
     if (!inputRef?.current) return;
@@ -209,6 +218,9 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
     const fieldMap: Record<string, string> = {
       sshHost: "host",
       sshPort: "port",
+      jaegerService: "service",
+      jaegerTags: "tags",
+      esIndex: "index",
     };
     onUpdate(node!.id, { [fieldMap[pickerKey]]: input.value });
     setActiveTextPicker(null);
@@ -459,8 +471,23 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
       {node.type === "Jaeger" && (
         <>
           <div>
-            <label className={labelClass}>Service</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className={labelClass + " mb-0"}>Service</label>
+              <VariablePicker
+                nodes={nodes}
+                edges={edges}
+                currentNodeId={node.id}
+                onInsert={(ref) => insertTextVariable("jaegerService", ref)}
+                trigger={
+                  <button type="button" className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono text-workflow-text-muted border border-workflow-border rounded hover:bg-workflow-surface-hover transition-colors duration-200">
+                    <Braces className="h-3 w-3" />
+                    Vars
+                  </button>
+                }
+              />
+            </div>
             <input
+              ref={jaegerServiceRef}
               type="text"
               value={(node.data as any).service || ""}
               onChange={(e) => handleChange("service", e.target.value)}
@@ -469,8 +496,23 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
             />
           </div>
           <div>
-            <label className={labelClass}>Tags</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className={labelClass + " mb-0"}>Tags</label>
+              <VariablePicker
+                nodes={nodes}
+                edges={edges}
+                currentNodeId={node.id}
+                onInsert={(ref) => insertTextVariable("jaegerTags", ref)}
+                trigger={
+                  <button type="button" className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono text-workflow-text-muted border border-workflow-border rounded hover:bg-workflow-surface-hover transition-colors duration-200">
+                    <Braces className="h-3 w-3" />
+                    Vars
+                  </button>
+                }
+              />
+            </div>
             <input
+              ref={jaegerTagsRef}
               type="text"
               value={(node.data as any).tags || ""}
               onChange={(e) => handleChange("tags", e.target.value)}
@@ -486,8 +528,23 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
         <>
 
           <div>
-            <label className={labelClass}>Index</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className={labelClass + " mb-0"}>Index</label>
+              <VariablePicker
+                nodes={nodes}
+                edges={edges}
+                currentNodeId={node.id}
+                onInsert={(ref) => insertTextVariable("esIndex", ref)}
+                trigger={
+                  <button type="button" className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono text-workflow-text-muted border border-workflow-border rounded hover:bg-workflow-surface-hover transition-colors duration-200">
+                    <Braces className="h-3 w-3" />
+                    Vars
+                  </button>
+                }
+              />
+            </div>
             <input
+              ref={esIndexRef}
               type="text"
               value={(node.data as any).index || ''}
               onChange={(e) => handleChange("index", e.target.value)}
