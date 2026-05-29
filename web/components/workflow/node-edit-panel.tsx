@@ -64,6 +64,13 @@ export const NODE_OUTPUT_VARIABLES: Record<string, { name: string; type: string;
     { name: "operator", type: "string", description: "Operator used" },
     { name: "value", type: "string", description: "Value compared against" },
   ],
+  SmartRouter: [
+    { name: "output", type: "string", description: "Selected branch ID" },
+    { name: "selectedBranch", type: "string", description: "Selected branch ID (same as output)" },
+    { name: "confidence", type: "float", description: "Confidence score (0.0-1.0)" },
+    { name: "reasoning", type: "string", description: "LLM reasoning for the routing decision" },
+    { name: "latency", type: "float", description: "LLM API response time in seconds" },
+  ],
   Start: [
     { name: "text", type: "string", description: "Text content from start node" },
   ],
@@ -834,6 +841,29 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
         </>
       )}
 
+      {/* SmartRouter Node */}
+      {node.type === "SmartRouter" && (
+        <>
+          <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg px-3 py-2">
+            <p className="text-[11px] text-amber-600 dark:text-amber-400 font-mono">
+              AI analyzes upstream data and automatically selects the best branch.
+              Each branch maps to an output port on the right side of the node.
+            </p>
+          </div>
+          <div>
+            <label className={labelClass}>Model</label>
+            <ModelSelector value={safeGetValue("model", "") as string} onChange={(v) => handleChange("model", v)} />
+          </div>
+          <div>
+            <label className={labelClass}>Routing Branches</label>
+            <SmartRouterBranchEditor
+              branches={safeGetValue("branches", "[]")}
+              onChange={(val) => handleChange("branches", val)}
+            />
+          </div>
+        </>
+      )}
+
       {/* Output Node */}
       {node.type === "Output" && (
         <>
@@ -1526,6 +1556,203 @@ function OutputVariables({ nodeType }: { nodeType: string }) {
             </p>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+// SmartRouter Branch Editor Component
+interface BranchItem {
+  id: string;
+  label: string;
+  description: string;
+}
+
+// Generate a branch ID from label: lowercase, replace spaces/special chars with underscores
+function generateBranchId(label: string): string {
+  return label
+    .toLowerCase()
+    .replace(/[^a-z0-9一-鿿]+/g, "_")
+    .replace(/^_|_$/g, "")
+    .slice(0, 32);
+}
+
+const PRESET_TEMPLATES: { name: string; branches: Omit<BranchItem, "id">[] }[] = [
+  {
+    name: "SRE Incident Triage",
+    branches: [
+      { label: "downstream", description: "Downstream service errors: timeouts, 5xx, connection refused" },
+      { label: "infrastructure", description: "Infrastructure issues: CPU/Memory/Disk saturation, node failures" },
+      { label: "network", description: "Network issues: DNS failures, packet loss, high latency" },
+    ],
+  },
+  {
+    name: "Application Error",
+    branches: [
+      { label: "app_error", description: "Application-level errors: exceptions, crash loops, OOMKilled" },
+      { label: "middleware", description: "Middleware issues: database, cache, message queue problems" },
+      { label: "config", description: "Configuration issues: bad deployments, env vars, feature flags" },
+    ],
+  },
+];
+
+function SmartRouterBranchEditor({ branches, onChange }: {
+  branches: string;
+  onChange: (val: string) => void;
+}) {
+  const [items, setItems] = useState<BranchItem[]>(() => {
+    try {
+      const parsed = JSON.parse(branches || "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [newLabel, setNewLabel] = useState("");
+  const [newDesc, setNewDesc] = useState("");
+
+  const syncToParent = (updated: BranchItem[]) => {
+    setItems(updated);
+    onChange(JSON.stringify(updated));
+  };
+
+  const addBranch = () => {
+    const label = newLabel.trim();
+    if (!label) return;
+    const id = generateBranchId(label);
+    // Avoid ID collision
+    let finalId = id;
+    let suffix = 1;
+    while (items.some(b => b.id === finalId)) {
+      finalId = `${id}_${suffix++}`;
+    }
+    syncToParent([...items, { id: finalId, label, description: newDesc.trim() }]);
+    setNewLabel("");
+    setNewDesc("");
+  };
+
+  const removeBranch = (idx: number) => {
+    syncToParent(items.filter((_, i) => i !== idx));
+  };
+
+  const updateBranch = (idx: number, field: keyof BranchItem, value: string) => {
+    const updated = [...items];
+    const oldItem = updated[idx];
+    const newItem = { ...oldItem, [field]: value };
+    // Auto-regenerate id when label changes
+    if (field === "label" && value.trim()) {
+      const newId = generateBranchId(value);
+      // Only auto-update id if the old id was auto-generated from the old label
+      if (generateBranchId(oldItem.label) === oldItem.id) {
+        let finalId = newId;
+        let suffix = 1;
+        while (items.some((b, i) => i !== idx && b.id === finalId)) {
+          finalId = `${newId}_${suffix++}`;
+        }
+        newItem.id = finalId;
+      }
+    }
+    updated[idx] = newItem;
+    syncToParent(updated);
+  };
+
+  const applyTemplate = (template: typeof PRESET_TEMPLATES[number]) => {
+    const newBranches: BranchItem[] = template.branches.map(b => ({
+      id: generateBranchId(b.label),
+      label: b.label,
+      description: b.description,
+    }));
+    syncToParent([...items, ...newBranches]);
+  };
+
+  const inputClass = "w-full bg-workflow-surface/50 border border-workflow-border rounded-lg px-3 py-2 text-sm text-workflow-text font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors duration-200";
+
+  return (
+    <div className="space-y-2">
+      {/* Preset templates */}
+      {items.length === 0 && (
+        <div className="space-y-1.5">
+          <p className="text-[10px] text-workflow-text-subtle font-mono">Quick start — choose a template:</p>
+          <div className="flex flex-wrap gap-1.5">
+            {PRESET_TEMPLATES.map((t) => (
+              <button
+                key={t.name}
+                type="button"
+                onClick={() => applyTemplate(t)}
+                className="text-[10px] font-mono px-2 py-1 rounded-lg border border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors"
+              >
+                {t.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Existing branches */}
+      {items.map((branch, idx) => (
+        <div key={branch.id} className="bg-workflow-surface/30 rounded-lg border border-workflow-border p-2 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <code className="text-[10px] font-mono text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
+              {branch.id}
+            </code>
+            <button
+              type="button"
+              onClick={() => removeBranch(idx)}
+              className="text-workflow-text-muted hover:text-red-400 transition-colors text-xs"
+            >
+              Remove
+            </button>
+          </div>
+          <input
+            type="text"
+            value={branch.label}
+            onChange={(e) => updateBranch(idx, "label", e.target.value)}
+            placeholder="Branch name (e.g. downstream)"
+            className={`${inputClass} text-xs py-1`}
+          />
+          <input
+            type="text"
+            value={branch.description}
+            onChange={(e) => updateBranch(idx, "description", e.target.value)}
+            placeholder="Description (helps LLM choose, e.g. connection timeout to downstream services)"
+            className={`${inputClass} text-xs py-1`}
+          />
+        </div>
+      ))}
+
+      {/* Add new branch */}
+      <div className="border border-dashed border-workflow-border rounded-lg p-2 space-y-1.5">
+        <p className="text-[10px] text-workflow-text-subtle font-mono">Add Branch</p>
+        <input
+          type="text"
+          value={newLabel}
+          onChange={(e) => setNewLabel(e.target.value)}
+          placeholder="Branch name (e.g. downstream)"
+          className={`${inputClass} text-xs py-1`}
+        />
+        <input
+          type="text"
+          value={newDesc}
+          onChange={(e) => setNewDesc(e.target.value)}
+          placeholder="Description (helps LLM choose, e.g. connection timeout to downstream services)"
+          className={`${inputClass} text-xs py-1`}
+        />
+        <button
+          type="button"
+          onClick={addBranch}
+          disabled={!newLabel.trim()}
+          className="w-full text-xs font-mono px-2 py-1 rounded-lg border border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          + Add Branch
+        </button>
+      </div>
+
+      {items.length > 0 && (
+        <p className="text-[10px] text-workflow-text-subtle font-mono">
+          Drag from the branch ports on the right side of the node to connect downstream nodes.
+          Only the selected branch will execute; others will be skipped.
+        </p>
       )}
     </div>
   );

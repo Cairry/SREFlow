@@ -16,6 +16,6 @@ Database:
   # SQLite 配置 (当 type 为 sqlite 时使用)
   path: data/rcaagent.db
 
-license:
+License:
   # license文件路径
   path: "config/license.lic"

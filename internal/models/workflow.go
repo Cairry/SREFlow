@@ -62,11 +62,12 @@ type NodeExecutor func(ctx context.Context, nc *NodeContext) (*NodeResult, error
 
 // NodeContext is the runtime context passed to a node executor
 type NodeContext struct {
-	NodeID    string         `json:"nodeId"`
-	NodeType  string         `json:"nodeType"`
-	Config    map[string]any `json:"config"`    // node-specific config values
-	Input     map[string]any `json:"input"`     // input values from connected upstream nodes
-	Variables map[string]any `json:"variables"` // shared workflow variables
+	NodeID      string         `json:"nodeId"`
+	NodeType    string         `json:"nodeType"`
+	Config      map[string]any `json:"config"`       // node-specific config values
+	Input       map[string]any `json:"input"`         // input values from connected upstream nodes
+	Variables   map[string]any `json:"variables"`     // shared workflow variables
+	HandleEdges map[string]string `json:"handleEdges,omitempty"` // sourceHandle -> target (for multi-output nodes like SmartRouter)
 }
 
 // NodeResult is the output from a node executor

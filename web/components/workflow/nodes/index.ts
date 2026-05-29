@@ -1,5 +1,6 @@
 export { LLMNode } from "./llm-node";
 export { ConditionNode } from "./condition-node";
+export { SmartRouterNode } from "./smart-router-node";
 export { PrometheusNode } from "./prometheus-node";
 export { JaegerNode } from "./jaeger-node";
 export { ElasticsearchNode } from "./elasticsearch-node";

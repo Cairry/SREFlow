@@ -220,8 +220,9 @@ type WorkflowNode struct {
 
 // WorkflowEdge 工作流边
 type WorkflowEdge struct {
-	Source string `json:"source"`
-	Target string `json:"target"`
+	Source       string `json:"source"`
+	Target       string `json:"target"`
+	SourceHandle string `json:"sourceHandle,omitempty"`
 }
 
 // parseNodes 解析节点

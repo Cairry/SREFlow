@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Zap,
   Puzzle,
+  Route,
 } from "lucide-react";
 
 interface NodePaletteProps {
@@ -63,6 +64,7 @@ const NODE_DEFINITIONS: NodeDef[] = [
   { type: "LLM", label: "LLM", description: "Call LLM models", icon: <Sparkles className="w-4 h-4" />, category: "ai" },
   // Logic
   { type: "Condition", label: "Condition", description: "Branch logic flow", icon: <GitBranch className="w-4 h-4" />, category: "logic" },
+  { type: "SmartRouter", label: "SmartRouter", description: "AI-powered smart routing", icon: <Route className="w-4 h-4" />, category: "logic" },
   // Output
   { type: "Output", label: "Output", description: "Export Output", icon: <FileOutput className="w-4 h-4" />, category: "output" },
 ];

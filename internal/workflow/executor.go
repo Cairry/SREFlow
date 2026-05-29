@@ -82,10 +82,11 @@ type ExecutionContext struct {
 
 // ExecutionGraph 执行图
 type ExecutionGraph struct {
-	Nodes    map[string]*ExecutableNode
-	Edges    map[string][]string // source -> targets
-	Incoming map[string][]string // target -> sources
-	Mutex    sync.RWMutex        // 保护图的并发访问
+	Nodes       map[string]*ExecutableNode
+	Edges       map[string][]string          // source -> targets
+	HandleEdges map[string]map[string]string // source -> sourceHandle -> target (for SmartRouter branch routing)
+	Incoming    map[string][]string          // target -> sources
+	Mutex       sync.RWMutex                 // 保护图的并发访问
 }
 
 // ExecutableNode 可执行节点
@@ -119,15 +120,23 @@ type LevelNodes map[int][]string
 // buildExecutionGraph 构建执行图
 func (e *WorkflowExecutor) buildExecutionGraph(topology *WorkflowTopology) (*ExecutionGraph, error) {
 	graph := &ExecutionGraph{
-		Nodes:    make(map[string]*ExecutableNode),
-		Edges:    make(map[string][]string),
-		Incoming: make(map[string][]string),
+		Nodes:       make(map[string]*ExecutableNode),
+		Edges:       make(map[string][]string),
+		HandleEdges: make(map[string]map[string]string),
+		Incoming:    make(map[string][]string),
 	}
 
 	// 创建边
 	for _, edge := range topology.Edges {
 		graph.Edges[edge.Source] = append(graph.Edges[edge.Source], edge.Target)
 		graph.Incoming[edge.Target] = append(graph.Incoming[edge.Target], edge.Source)
+		// 记录 sourceHandle 映射（用于 SmartRouter 等多输出节点）
+		if edge.SourceHandle != "" {
+			if graph.HandleEdges[edge.Source] == nil {
+				graph.HandleEdges[edge.Source] = make(map[string]string)
+			}
+			graph.HandleEdges[edge.Source][edge.SourceHandle] = edge.Target
+		}
 	}
 
 	// 创建节点：只包含有连接线的节点
@@ -240,6 +249,10 @@ func (e *WorkflowExecutor) executeByLevels(ctx *ExecutionContext, levels LevelNo
 			}
 		}
 
+		// 检查已完成的节点是否有 Next 字段（SmartRouter 分支路由）
+		// 如果有，则跳过不在 Next 中的下游节点
+		e.skipNonSelectedBranches(ctx, nodeIDs, levels)
+
 	}
 
 	return nil
@@ -311,7 +324,7 @@ func (e *WorkflowExecutor) waitLevelComplete(ctx *ExecutionContext, nodeIDs []st
 					status := node.Status
 					node.Mutex.RUnlock()
 
-					if status != NodeStatusCompleted && status != NodeStatusFailed {
+					if status != NodeStatusCompleted && status != NodeStatusFailed && status != NodeStatusSkipped && status != NodeStatusWarning {
 						allComplete = false
 						break
 					}
@@ -327,6 +340,116 @@ func (e *WorkflowExecutor) waitLevelComplete(ctx *ExecutionContext, nodeIDs []st
 				}
 				return nil
 			}
+		}
+	}
+}
+
+// skipNonSelectedBranches checks completed nodes for Next field (SmartRouter branch routing).
+// Downstream nodes not in Next are marked as skipped.
+func (e *WorkflowExecutor) skipNonSelectedBranches(ctx *ExecutionContext, completedNodeIDs []string, levels LevelNodes) {
+	for _, nodeID := range completedNodeIDs {
+		ctx.Graph.Mutex.RLock()
+		node := ctx.Graph.Nodes[nodeID]
+		ctx.Graph.Mutex.RUnlock()
+
+		if node == nil {
+			continue
+		}
+
+		node.Mutex.RLock()
+		result := node.Result
+		node.Mutex.RUnlock()
+
+		if result == nil || len(result.Next) == 0 {
+			continue
+		}
+
+		nextSet := make(map[string]bool)
+		for _, n := range result.Next {
+			nextSet[n] = true
+		}
+
+		ctx.Graph.Mutex.RLock()
+		allTargets := ctx.Graph.Edges[nodeID]
+		ctx.Graph.Mutex.RUnlock()
+
+		for _, targetID := range allTargets {
+			if nextSet[targetID] {
+				continue
+			}
+
+			ctx.Graph.Mutex.RLock()
+			targetNode := ctx.Graph.Nodes[targetID]
+			ctx.Graph.Mutex.RUnlock()
+
+			if targetNode == nil {
+				continue
+			}
+
+			targetNode.Mutex.Lock()
+			if targetNode.Status == NodeStatusPending {
+				targetNode.Status = NodeStatusSkipped
+				targetNode.Result = &models.NodeResult{Outputs: map[string]any{}}
+				log.Printf("[Executor] Skipping node %s (not in Next of %s)", targetID, nodeID)
+				targetNode.Mutex.Unlock()
+
+				e.executionMutex.Lock()
+				ctx.Execution.CompletedNodes = append(ctx.Execution.CompletedNodes, targetID)
+				ctx.Execution.NodeResults[targetID] = &models.NodeResult{
+					Outputs: map[string]any{"skipped": true, "reason": "not selected by upstream router"},
+				}
+				e.executionMutex.Unlock()
+
+				ctx.Monitor.EmitStreamNodeSkipped(ctx.Execution.ID, ctx.Execution.WorkflowID, ctx.Execution.WorkflowName, targetID, targetNode.Type)
+				if ctx.StateManager != nil {
+					ctx.StateManager.SetNodeState(ctx.Execution.ID, targetID, targetNode.Type, NodeStateSkipped, nil, "not selected by upstream router")
+				}
+
+				e.skipDownstream(ctx, targetID)
+			} else {
+				targetNode.Mutex.Unlock()
+			}
+		}
+	}
+}
+
+// skipDownstream recursively skips all downstream nodes of a skipped node
+func (e *WorkflowExecutor) skipDownstream(ctx *ExecutionContext, sourceID string) {
+	ctx.Graph.Mutex.RLock()
+	targets := ctx.Graph.Edges[sourceID]
+	ctx.Graph.Mutex.RUnlock()
+
+	for _, targetID := range targets {
+		ctx.Graph.Mutex.RLock()
+		targetNode := ctx.Graph.Nodes[targetID]
+		ctx.Graph.Mutex.RUnlock()
+
+		if targetNode == nil {
+			continue
+		}
+
+		targetNode.Mutex.Lock()
+		if targetNode.Status == NodeStatusPending {
+			targetNode.Status = NodeStatusSkipped
+			targetNode.Result = &models.NodeResult{Outputs: map[string]any{}}
+			log.Printf("[Executor] Skipping downstream node %s (parent %s was skipped)", targetID, sourceID)
+			targetNode.Mutex.Unlock()
+
+			e.executionMutex.Lock()
+			ctx.Execution.CompletedNodes = append(ctx.Execution.CompletedNodes, targetID)
+			ctx.Execution.NodeResults[targetID] = &models.NodeResult{
+				Outputs: map[string]any{"skipped": true, "reason": "upstream node was skipped"},
+			}
+			e.executionMutex.Unlock()
+
+			ctx.Monitor.EmitStreamNodeSkipped(ctx.Execution.ID, ctx.Execution.WorkflowID, ctx.Execution.WorkflowName, targetID, targetNode.Type)
+			if ctx.StateManager != nil {
+				ctx.StateManager.SetNodeState(ctx.Execution.ID, targetID, targetNode.Type, NodeStateSkipped, nil, "upstream node was skipped")
+			}
+
+			e.skipDownstream(ctx, targetID)
+		} else {
+			targetNode.Mutex.Unlock()
 		}
 	}
 }
@@ -527,12 +650,21 @@ func (e *WorkflowExecutor) prepareNodeContext(ctx *ExecutionContext, nodeID stri
 	// 从 integration 合并配置
 	resolvedConfig = e.mergeIntegrationConfig(ctx, node, resolvedConfig)
 
+	// 获取该节点的 handle->target 映射（用于 SmartRouter 等多输出节点）
+	var handleEdges map[string]string
+	ctx.Graph.Mutex.RLock()
+	if he, ok := ctx.Graph.HandleEdges[nodeID]; ok {
+		handleEdges = he
+	}
+	ctx.Graph.Mutex.RUnlock()
+
 	return &models.NodeContext{
-		NodeID:    nodeID,
-		NodeType:  node.Type,
-		Config:    resolvedConfig,
-		Input:     resolvedInput,
-		Variables: ctx.Execution.Variables,
+		NodeID:      nodeID,
+		NodeType:    node.Type,
+		Config:      resolvedConfig,
+		Input:       resolvedInput,
+		Variables:   ctx.Execution.Variables,
+		HandleEdges: handleEdges,
 	}
 }
 
@@ -753,6 +885,8 @@ func (e *WorkflowExecutor) nodeTypeToIntegrationType(nodeType string) models.Int
 		return models.IntegrationTypeLoki
 	case "ClickHouse":
 		return models.IntegrationTypeClickhouse
+	case "SmartRouter":
+		return models.IntegrationTypeLLM
 	case "SSH":
 		return models.IntegrationTypeSSHAuth
 	case "Kubernetes":

@@ -22,6 +22,7 @@ func BootstrapNodeRegistry(mcpRepo repos.MCPServerRepoInter) *NodeRegistry {
 	// 注册处理节点
 	registry.Register(nodes.NewLLMExecutor())
 	registry.Register(nodes.NewConditionExecutor())
+	registry.Register(nodes.NewSmartRouterExecutor())
 	registry.Register(nodes.NewGoScriptExecutor())
 	registry.Register(nodes.NewMCPToolExecutor(mcpRepo))
 

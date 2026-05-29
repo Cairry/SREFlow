@@ -13,6 +13,12 @@ export const NODE_COLORS: Record<WorkflowNodeType, { bg: string; border: string;
     accent: "text-gray-600 dark:text-gray-400",
     handle: "bg-gray-500 border-gray-600",
   },
+  SmartRouter: {
+    bg: "bg-workflow-node-bg",
+    border: "border-amber-500/50 dark:border-amber-500/50",
+    accent: "text-amber-600 dark:text-amber-400",
+    handle: "bg-amber-500 border-amber-600",
+  },
   Prometheus: {
     bg: "bg-workflow-node-bg",
     border: "border-gray-500/50 dark:border-gray-500/50",
@@ -90,6 +96,7 @@ export const NODE_COLORS: Record<WorkflowNodeType, { bg: string; border: string;
 export const NODE_ICONS: Record<WorkflowNodeType, string> = {
   LLM: "sparkles",
   Condition: "git-branch",
+  SmartRouter: "route",
   Prometheus: "activity",
   Jaeger: "search",
   Elasticsearch: "search",

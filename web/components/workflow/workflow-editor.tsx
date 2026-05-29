@@ -871,7 +871,7 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
   // 类型转换函数：将字符串转换为有效的 WorkflowNodeType
   const toWorkflowNodeType = (type: string): WorkflowNodeType => {
     const validTypes: WorkflowNodeType[] = [
-      "LLM", "Condition", "Prometheus", "Jaeger",
+      "LLM", "Condition", "SmartRouter", "Prometheus", "Jaeger",
       "Elasticsearch", "Loki", "ClickHouse", "Output",
       "Start", "GoScript"
     ];

@@ -142,17 +142,16 @@ func ExecutePrometheus(ctx context.Context, nc *models.NodeContext) (*models.Nod
 	log.Printf("[Prometheus] Query returned %d series (type: %s)", len(series), resultType)
 
 	// 处理查询结果
-	var processedSeries []map[string]any
-	for _, s := range series {
-		if seriesData, ok := s.(map[string]any); ok {
-			processedSeries = append(processedSeries, seriesData)
-		}
-	}
+	// var processedSeries []map[string]any
+	// for _, s := range series {
+	// 	if seriesData, ok := s.(map[string]any); ok {
+	// 		processedSeries = append(processedSeries, seriesData)
+	// 	}
+	// }
 
-	log.Printf("[Prometheus] Query executed: %s, seriesCount=%d", query, len(processedSeries))
+	// log.Printf("[Prometheus] Query executed: %s, seriesCount=%d", query, len(processedSeries))
 
 	return newResult(map[string]any{
-		"series":   processedSeries,
-		"raw_data": result,
+		"series": series,
 	}), nil
 }

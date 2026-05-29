@@ -26,17 +26,23 @@ import {
   Globe,
   MinusCircle,
   Puzzle,
+  Route,
+  Container,
+  Terminal,
 } from "lucide-react";
 import { useReactFlow } from "@xyflow/react";
 
 const ICONS: Record<WorkflowNodeType, React.ReactNode> = {
   LLM: <Sparkles className="w-4 h-4" />,
   Condition: <GitBranch className="w-4 h-4" />,
+  SmartRouter: <Route className="w-4 h-4" />,
   Prometheus: <Activity className="w-4 h-4" />,
   Jaeger: <Search className="w-4 h-4" />,
   Elasticsearch: <Search className="w-4 h-4" />,
   Loki: <Search className="w-4 h-4" />,
   ClickHouse: <BarChart3 className="w-4 h-4" />,
+  SSH: <Terminal className="w-4 h-4" />,
+  Kubernetes: <Container className="w-4 h-4" />,
   Output: <FileOutput className="w-4 h-4" />,
   Start: <Play className="w-4 h-4" />,
   GoScript: <Code className="w-4 h-4" />,
@@ -71,6 +77,7 @@ interface BaseNodeProps extends Omit<NodeProps<any>, 'data'> {
   hasOutput?: boolean;
   hasTrueOutput?: boolean;
   hasFalseOutput?: boolean;
+  branchHandles?: { id: string; label: string }[];
   data?: Record<string, unknown>;
   runStatus?: NodeRunStatus;
 }
@@ -82,6 +89,7 @@ export function BaseNode({
   hasOutput = true,
   hasTrueOutput = false,
   hasFalseOutput = false,
+  branchHandles,
   selected,
   data,
   id,
@@ -163,7 +171,7 @@ export function BaseNode({
         />
       )}
 
-      {hasTrueOutput && (
+      {hasTrueOutput && !branchHandles?.length && (
         <>
           <Handle
             type="source"
@@ -181,6 +189,31 @@ export function BaseNode({
           />
           <div className="absolute right-[-40px] top-[35%] text-xs text-gray-500 dark:text-gray-400 font-mono">true</div>
           <div className="absolute right-[-40px] top-[65%] text-xs text-gray-500 dark:text-gray-400 font-mono">false</div>
+        </>
+      )}
+
+      {branchHandles && branchHandles.length > 0 && (
+        <>
+          {branchHandles.map((branch, idx) => {
+            const topPercent = Math.round(30 + (idx / Math.max(branchHandles.length - 1, 1)) * 50);
+            return (
+              <React.Fragment key={branch.id}>
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={branch.id}
+                  style={{ top: `${topPercent}%` }}
+                  className="!w-1 !h-4 !bg-amber-500 !border !border-amber-300/30 rounded-sm"
+                />
+                <div
+                  className="absolute right-[-8px] text-[10px] text-amber-600 dark:text-amber-400 font-mono whitespace-nowrap bg-workflow-node-bg px-1 rounded"
+                  style={{ top: `${topPercent - 1}%`, transform: "translateX(100%)" }}
+                >
+                  {branch.label}
+                </div>
+              </React.Fragment>
+            );
+          })}
         </>
       )}
     </div>

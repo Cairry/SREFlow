@@ -28,6 +28,7 @@ import { generateNodeId } from "@/lib/node-id-generator";
 import {
   LLMNode,
   ConditionNode,
+  SmartRouterNode,
   PrometheusNode,
   JaegerNode,
   ElasticsearchNode,
@@ -45,6 +46,7 @@ import {
 const nodeTypes: NodeTypes = {
   LLM: LLMNode,
   Condition: ConditionNode,
+  SmartRouter: SmartRouterNode,
   Prometheus: PrometheusNode,
   Jaeger: JaegerNode,
   Elasticsearch: ElasticsearchNode,
@@ -70,6 +72,11 @@ export const defaultNodeData: Record<WorkflowNodeType, object> = {
     condition: "",
     operator: "contains",
     value: "",
+  },
+  SmartRouter: {
+    label: "SmartRouter",
+    model: "",
+    branches: "[]",
   },
   Prometheus: {
     label: "Prometheus",

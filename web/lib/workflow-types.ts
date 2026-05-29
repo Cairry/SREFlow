@@ -12,6 +12,11 @@ export interface LLMNodeData extends BaseNodeData {
   systemPrompt?: string;
 }
 
+export interface SmartRouterNodeData extends BaseNodeData {
+  model: string;
+  branches: string; // JSON string of branch definitions
+}
+
 export interface ConditionNodeData extends BaseNodeData {
   condition: string;
   operator: "contains" | "equals" | "notEquals" | "greaterThan" | "lessThan" | "isEmpty" | "isNotEmpty";
@@ -117,6 +122,7 @@ export interface HTTPNodeData extends BaseNodeData {
 export type WorkflowNodeData =
   | LLMNodeData
   | ConditionNodeData
+  | SmartRouterNodeData
   | PrometheusNodeData
   | JaegerNodeData
   | ElasticsearchNodeData
@@ -134,6 +140,7 @@ export type WorkflowNodeData =
 export type WorkflowNodeType =
   | "LLM"
   | "Condition"
+  | "SmartRouter"
   | "Prometheus"
   | "Jaeger"
   | "Elasticsearch"

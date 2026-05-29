@@ -25,7 +25,7 @@ type Config struct {
 	MCP      *MCPConfig      `json:"mcp"`
 	Skill    *SkillConfig    `json:"skill"`
 	Workflow *WorkflowConfig `json:"workflow"`
-	License  LicenseConfig   `json:"license"`
+	License  LicenseConfig   `json:"License"`
 }
 
 type Server struct {

@@ -216,6 +216,21 @@ func main() string {
     ],
   },
   {
+    type: "SmartRouter",
+    title: "SmartRouter 智能路由",
+    category: "Logic",
+    icon: "route",
+    description: "基于 LLM 的智能路由节点。自动分析上游输入数据，选择最合适的分支继续执行。与 Condition 的固定规则不同，SmartRouter 由 AI 根据数据语义动态判断路由方向，适合需要理解上下文语义的复杂分流场景，如告警分类、故障方向判断等。运行时会自动合并 LLM Integration 配置（apiKey、baseURL）。",
+    configFields: [
+      { name: "model", type: "string", required: false, description: "LLM 模型名称，例如 gpt-4o，默认 gpt-4o" },
+      { name: "branches", type: "string", required: true, description: '分支定义 JSON 数组，每项包含 id、label、description。例如：[{"id":"downstream","label":"下游服务异常","description":"日志中显示下游调用超时或 5xx"}]' },
+    ],
+    example: [
+      { label: "model", value: "gpt-4o" },
+      { label: "branches", value: '[\n  {"id":"downstream","label":"下游服务异常","description":"日志中显示下游调用超时或 5xx"},\n  {"id":"resource","label":"资源瓶颈","description":"CPU/内存/磁盘等资源指标异常"},\n  {"id":"config","label":"配置变更","description":"近期有部署或配置变更"}\n]', isCode: true },
+    ],
+  },
+  {
     type: "Start",
     title: "Start 起始节点",
     category: "Logic",
