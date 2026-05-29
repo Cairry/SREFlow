@@ -62,7 +62,8 @@ func NewServer(cfg Config) *server.MCPServer {
 	s.AddTool(mcp.NewTool("workflow_execute",
 		mcp.WithDescription("Execute a workflow by ID"),
 		mcp.WithString("workflowId", mcp.Required(), mcp.Description("Workflow ID to execute")),
-		mcp.WithString("input", mcp.Description("Input text for the Start node")),
+		mcp.WithString("input", mcp.Description("Input text for the Start node (used when mode=text)")),
+		mcp.WithString("mode", mcp.Description("Execution mode: json (entire body as Start node data) or text (input field as data, default)")),
 	), executeWorkflowHandler())
 
 	s.AddTool(mcp.NewTool("workflow_status",
@@ -118,6 +119,10 @@ func executeWorkflowHandler() server.ToolHandlerFunc {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		input := req.GetString("input", "")
+		mode := req.GetString("mode", "")
+		if mode == "" {
+			mode = "text"
+		}
 
 		body := map[string]interface{}{
 			"workflowId": workflowId,
@@ -128,7 +133,14 @@ func executeWorkflowHandler() server.ToolHandlerFunc {
 			return mcp.NewToolResultErrorFromErr("failed to marshal request", err), nil
 		}
 
-		httpReq, err := http.NewRequest("POST", baseURL+"/workflow/"+workflowId+"/execute", bytes.NewReader(bodyBytes))
+		executeURL := baseURL + "/workflow/" + workflowId + "/execute"
+		if mode == "json" {
+			executeURL += "?mode=json"
+			// mode=json 时将整个 body 作为 rawBody 发送
+			bodyBytes = []byte(input)
+		}
+
+		httpReq, err := http.NewRequest("POST", executeURL, bytes.NewReader(bodyBytes))
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to create request", err), nil
 		}

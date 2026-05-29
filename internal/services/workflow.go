@@ -18,16 +18,30 @@ import (
 
 // injectStartNodeInput 将 input 参数注入到 Start 节点的 text 字段
 // 如果数据库中节点为空且 input 也为空，返回错误
-func injectStartNodeInput(workflowModel *models.Workflow, input string) error {
-	if input == "" {
-		var nodes []map[string]interface{}
-		if err := json.Unmarshal([]byte(workflowModel.Nodes), &nodes); err != nil {
-			return fmt.Errorf("workflow nodes is empty")
+// mode=json 时将 rawBody 作为 text 注入；mode=text 时将 input 作为 text 注入
+func injectStartNodeInput(workflowModel *models.Workflow, input string, mode string, rawBody string) error {
+	if mode == "json" {
+		if rawBody == "" {
+			var nodes []map[string]interface{}
+			if err := json.Unmarshal([]byte(workflowModel.Nodes), &nodes); err != nil {
+				return fmt.Errorf("workflow nodes is empty")
+			}
+			if len(nodes) == 0 {
+				return fmt.Errorf("workflow nodes is empty")
+			}
+			return nil
 		}
-		if len(nodes) == 0 {
-			return fmt.Errorf("workflow nodes is empty")
+	} else {
+		if input == "" {
+			var nodes []map[string]interface{}
+			if err := json.Unmarshal([]byte(workflowModel.Nodes), &nodes); err != nil {
+				return fmt.Errorf("workflow nodes is empty")
+			}
+			if len(nodes) == 0 {
+				return fmt.Errorf("workflow nodes is empty")
+			}
+			return nil
 		}
-		return nil
 	}
 
 	var nodes []map[string]interface{}
@@ -38,7 +52,11 @@ func injectStartNodeInput(workflowModel *models.Workflow, input string) error {
 	for _, node := range nodes {
 		if nodeType, ok := node["type"].(string); ok && nodeType == "Start" {
 			if data, ok := node["data"].(map[string]interface{}); ok {
-				data["text"] = input
+				if mode == "json" {
+					data["text"] = rawBody
+				} else {
+					data["text"] = input
+				}
 			}
 		}
 	}
@@ -1044,7 +1062,7 @@ func (s *NewWorkflowService) ExecuteAsync(req interface{}) (data interface{}, er
 	}
 
 	// 将 input 参数注入到 Start 节点
-	if err := injectStartNodeInput(workflow, r.Input); err != nil {
+	if err := injectStartNodeInput(workflow, r.Input, r.Mode, r.RawBody); err != nil {
 		return nil, fmt.Errorf("bad request: %w", err)
 	}
 

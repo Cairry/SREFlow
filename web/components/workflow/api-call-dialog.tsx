@@ -75,11 +75,18 @@ export function ApiCallDialog({
   const execId = "exec-xxxxxxxxxxxx"; // 执行 ID，从 execute 接口获取
 
   const executeCurl = workflowId
-    ? `curl -X POST "${baseUrl}/api/workflow/${workflowId}/execute" \\
+    ? `curl -X POST "${baseUrl}/api/workflow/${workflowId}/execute?mode=text" \\
   -H "Content-Type: application/json" \\
   -H "X-Workspace-Id: ${wsId}" \\
   -d '{"input": "your prompt text here"}'`
     : `# Please save the workflow first to get the API endpoint`;
+
+  const executeCurlJson = workflowId
+    ? `curl -X POST "${baseUrl}/api/workflow/${workflowId}/execute?mode=json" \\
+  -H "Content-Type: application/json" \\
+  -H "X-Workspace-Id: ${wsId}" \\
+  -d '{"key1": "value1", "key2": "value2"}'`
+    : "";
 
   const statusCurl = getStatusCurl(execId, baseUrl, wsId);
   const resultCurl = getResultCurl(execId, baseUrl, wsId);
@@ -110,7 +117,7 @@ export function ApiCallDialog({
               POST
             </span>
             <code className="text-xs text-workflow-text-muted font-mono">
-              {baseUrl}/api/workflow/&#123;workflowId&#125;/execute
+              {baseUrl}/api/workflow/&#123;workflowId&#125;/execute<code className="text-violet-400">?mode=text|json</code>
             </code>
           </div>
           <div className="border border-workflow-border rounded-lg overflow-hidden">
@@ -147,7 +154,15 @@ export function ApiCallDialog({
                   <td className="px-3 py-2 text-workflow-text-muted">body</td>
                   <td className="px-3 py-2 text-emerald-400">string</td>
                   <td className="px-3 py-2 text-workflow-text-muted">
-                    Start 节点 text 参数 (如 Start 节点已配置则可省略)
+                    Start 节点 text 参数 (mode=text 时使用，如 Start 节点已配置则可省略)
+                  </td>
+                </tr>
+                <tr>
+                  <td className="px-3 py-2 text-violet-400">mode</td>
+                  <td className="px-3 py-2 text-workflow-text-muted">query</td>
+                  <td className="px-3 py-2 text-emerald-400">string</td>
+                  <td className="px-3 py-2 text-workflow-text-muted">
+                    执行模式：<code className="text-violet-400">text</code>（默认）从 body 的 input 字段读取；<code className="text-violet-400">json</code> 将整个 body 作为 Start 节点输出
                   </td>
                 </tr>
               </tbody>
@@ -156,7 +171,7 @@ export function ApiCallDialog({
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
               <Terminal className="w-3.5 h-3.5 text-workflow-text-muted" />
-              <span className="text-xs font-mono font-medium text-workflow-text">cURL</span>
+              <span className="text-xs font-mono font-medium text-workflow-text">cURL (mode=text)</span>
               <div className="ml-auto">
                 <CopyButton text={executeCurl} />
               </div>
@@ -165,6 +180,21 @@ export function ApiCallDialog({
               <pre className="whitespace-pre-wrap break-all">{executeCurl}</pre>
             </CodeBlock>
           </div>
+          {executeCurlJson && (
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <Terminal className="w-3.5 h-3.5 text-workflow-text-muted" />
+                <span className="text-xs font-mono font-medium text-workflow-text">cURL (mode=json)</span>
+                <span className="text-xs text-workflow-text-muted">— 整个 body 作为 Start 节点输出，下游通过 start.key 引用</span>
+                <div className="ml-auto">
+                  <CopyButton text={executeCurlJson} />
+                </div>
+              </div>
+              <CodeBlock>
+                <pre className="whitespace-pre-wrap break-all">{executeCurlJson}</pre>
+              </CodeBlock>
+            </div>
+          )}
         </div>
 
         {/* ── 2. Status ──────────────────────────────── */}
@@ -287,7 +317,8 @@ export function ApiCallDialog({
           <ul className="text-xs font-mono text-workflow-text-muted space-y-1 list-disc list-inside">
             <li>执行是异步的，立即返回 executionId，不会阻塞 HTTP 连接</li>
             <li>推荐使用 SSE stream 获取实时节点状态变化，断线后自动降级为轮询</li>
-            <li>input 参数：如果 Start 节点未配置 text，则必须传递；已配置则可省略</li>
+            <li>input 参数：如果 Start 节点未配置 text，则必须传递；已配置则可省略（仅 mode=text）</li>
+            <li>mode=json 时，整个 body 将作为 Start 节点输出，下游节点通过 start.fieldName 引用各字段</li>
             <li>Workflow 必须在执行前保存，否则 API 会返回 404</li>
           </ul>
         </div>

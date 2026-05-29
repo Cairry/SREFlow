@@ -211,6 +211,42 @@ MCP Server 外部集成配置见 `mcp_config.json`。
 | Topology | `/api/topology` | 拓扑管理 |
 | MCP Servers | `/api/mcp-servers` | MCP Server 管理 + 工具列表 + 状态 |
 
+### 执行工作流
+
+```
+POST /api/workflow/:id/execute?mode={json|text}
+```
+
+**Query 参数：**
+
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| `mode` | 否 | 执行模式，默认 `text`。`text`：从 body 的 `input` 字段读取内容输出到 Start 节点；`json`：将整个 body 内容直接作为 Start 节点的输出 |
+
+**mode=text（默认）：**
+
+从 body 中读取 `input` 字段，将 `input` 内容传递给 Start 节点。适用于传递简单的文本或预格式化字符串。
+
+```bash
+curl -X POST 'http://localhost:9001/api/workflow/{id}/execute?mode=text' \
+  -H 'Content-Type: application/json' \
+  -d '{"input": "hello world"}'
+```
+
+Start 节点 output: `{"text": "hello world"}`
+
+**mode=json：**
+
+将整个 body 作为 JSON 直接输出到 Start 节点。适用于需要传递结构化数据（如告警信息）的场景，下游节点可通过 `start.fieldName` 引用各字段。
+
+```bash
+curl -X POST 'http://localhost:9001/api/workflow/{id}/execute?mode=json' \
+  -H 'Content-Type: application/json' \
+  -d '{"alert": "CPU > 90%", "host": "node-1", "severity": "critical"}'
+```
+
+Start 节点 output: `{"alert": "CPU > 90%", "host": "node-1", "severity": "critical"}`
+
 ## 🤝 参与贡献
 
 欢迎提交 Issue 和 Pull Request！

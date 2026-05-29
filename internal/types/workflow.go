@@ -15,7 +15,9 @@ import (
 type RequestWorkflowExecute struct {
 	TenantId   string `json:"tenantId"`
 	WorkflowId string `json:"workflowId"`
-	Input      string `json:"input"` // Start 节点 text 参数
+	Input      string `json:"input"`  // Start 节点 text 参数 (mode=text 时使用)
+	Mode       string `json:"-"`      // 执行模式: json/text，从 query param 读取，不从 body 解析
+	RawBody    string `json:"-"`      // mode=json 时，原始 body 内容
 }
 
 func (execute *RequestWorkflowExecute) Valid(ctx context.Context, database repos.EntryInter, cache cache.EntryInter) error {
@@ -30,7 +32,12 @@ func (execute *RequestWorkflowExecute) Valid(ctx context.Context, database repos
 		return fmt.Errorf("workflow not found")
 	}
 
-	// 解析工作流节点，检查 Start 节点的 text 是否为空
+	// mode=json 时，RawBody 已包含数据，无需校验 input
+	if execute.Mode == "json" {
+		return nil
+	}
+
+	// mode=text 时，解析工作流节点，检查 Start 节点的 text 是否为空
 	if execute.Input == "" {
 		// input 参数未传递，检查数据库中 Start 节点的 text 是否配置
 		var nodes []map[string]interface{}

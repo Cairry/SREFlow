@@ -1,8 +1,10 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strconv"
 	"time"
 
@@ -174,6 +176,19 @@ func executeWorkflow(c *gin.Context) {
 		return
 	}
 
+	// 读取 mode query 参数，默认为 text
+	mode := c.Query("mode")
+	if mode == "" {
+		mode = "text"
+	}
+
+	// mode=json 时读取原始 body，用于将整个 body 传递给 Start 节点
+	var rawBody []byte
+	if mode == "json" {
+		rawBody, _ = io.ReadAll(c.Request.Body)
+		c.Request.Body = io.NopCloser(bytes.NewBuffer(rawBody))
+	}
+
 	// 解析请求体，读取 input 参数
 	r := new(types.RequestWorkflowExecute)
 	if err := BindJson(c, r); err != nil {
@@ -182,6 +197,10 @@ func executeWorkflow(c *gin.Context) {
 	}
 
 	r.WorkflowId = id
+	r.Mode = mode
+	if mode == "json" {
+		r.RawBody = string(rawBody)
+	}
 
 	// 验证 input 参数：input 为空且数据库中 Start 节点 text 也为空时返回 400
 	ap := ctxutil.DO()

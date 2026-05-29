@@ -72,7 +72,8 @@ export const NODE_OUTPUT_VARIABLES: Record<string, { name: string; type: string;
     { name: "latency", type: "float", description: "LLM API response time in seconds" },
   ],
   Start: [
-    { name: "text", type: "string", description: "Text content from start node" },
+    { name: "text", type: "string", description: "完整文本内容（当输入为纯字符串时使用 start.text 引用）" },
+    { name: "xxx", type: "any", description: "当输入为 JSON 时，各字段直接展开，如 start.key1、start.key2" },
   ],
   GoScript: [
     { name: "output", type: "object", description: "User-defined output variable from script" },
@@ -990,7 +991,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
           <textarea
             value={safeGetValue('text', '')}
             onChange={(e) => handleChange("text", e.target.value)}
-            placeholder="Enter your text content..."
+            placeholder={"纯文本示例: service-a is down\nJSON 示例: {\"service\": \"a\", \"error\": \"timeout\"}"}
             className={`${textareaClass} h-40`}
           />
         </div>

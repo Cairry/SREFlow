@@ -152,6 +152,7 @@ func ExecutePrometheus(ctx context.Context, nc *models.NodeContext) (*models.Nod
 	// log.Printf("[Prometheus] Query executed: %s, seriesCount=%d", query, len(processedSeries))
 
 	return newResult(map[string]any{
+		"promQL": query,
 		"series": series,
 	}), nil
 }
