@@ -76,62 +76,6 @@ func (r *NodeRegistry) GetDefinition(nodeType string) (models.NodeDefinition, bo
 	return def, exists
 }
 
-// GetAllTypes 获取所有注册的节点类型
-func (r *NodeRegistry) GetAllTypes() []string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	types := make([]string, 0, len(r.executors))
-	for nodeType := range r.executors {
-		types = append(types, nodeType)
-	}
-	return types
-}
-
-// GetAllDefinitions 获取所有节点定义
-func (r *NodeRegistry) GetAllDefinitions() map[string]models.NodeDefinition {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	definitions := make(map[string]models.NodeDefinition)
-	for nodeType, def := range r.definitions {
-		definitions[nodeType] = def
-	}
-	return definitions
-}
-
-// GetByCategory 按类别获取节点类型
-func (r *NodeRegistry) GetByCategory(category string) []string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	var types []string
-	for nodeType, executor := range r.executors {
-		if executor.GetCategory() == category {
-			types = append(types, nodeType)
-		}
-	}
-	return types
-}
-
-// Unregister 注销节点
-func (r *NodeRegistry) Unregister(nodeType string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	delete(r.executors, nodeType)
-	delete(r.definitions, nodeType)
-}
-
-// Clear 清空所有注册的节点
-func (r *NodeRegistry) Clear() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	r.executors = make(map[string]NodeExecutor)
-	r.definitions = make(map[string]models.NodeDefinition)
-}
-
 // Validate 验证节点配置
 func (r *NodeRegistry) Validate(nodeType string, config map[string]any) error {
 	def, exists := r.GetDefinition(nodeType)
@@ -149,14 +93,4 @@ func (r *NodeRegistry) Validate(nodeType string, config map[string]any) error {
 	}
 
 	return nil
-}
-
-// GetSchema 获取节点配置模式
-func (r *NodeRegistry) GetSchema(nodeType string) ([]models.FieldSchema, error) {
-	def, exists := r.GetDefinition(nodeType)
-	if !exists {
-		return nil, fmt.Errorf("unknown node type: %s", nodeType)
-	}
-
-	return def.Config, nil
 }

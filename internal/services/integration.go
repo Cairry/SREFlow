@@ -199,11 +199,6 @@ func (s *IntegrationService) GetByWorkspaceID(c context.Context, workspaceID str
 	return s.repo.GetByWorkspaceID(workspaceID)
 }
 
-// GetByType 获取 workspace 指定类型的集成
-func (s *IntegrationService) GetByType(c context.Context, workspaceID string, integrationType models.IntegrationType) ([]*models.Integration, error) {
-	return s.repo.GetByWorkspaceIDAndType(workspaceID, integrationType)
-}
-
 // GetByID 根据ID获取集成
 func (s *IntegrationService) GetByID(c context.Context, id string) (*models.Integration, error) {
 	return s.repo.GetByID(id)

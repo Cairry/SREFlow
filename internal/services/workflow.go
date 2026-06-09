@@ -99,236 +99,6 @@ func NewNewWorkflowService(config *workflow.EngineConfig, workflowRepo repos.Wor
 	}
 }
 
-// ExecuteWorkflow 异步执行工作流
-func (s *NewWorkflowService) ExecuteWorkflow(ctx context.Context, req *types.RequestWorkflowExecute) (*types.ResponseWorkflowExecute, error) {
-	// 从数据库加载工作流
-	workflow, err := s.workflowRepo.GetByID(req.WorkflowId)
-	if err != nil {
-		return nil, fmt.Errorf("workflow not found: %s", req.WorkflowId)
-	}
-
-	// 解析工作流拓扑
-	topology, err := s.parser.ParseWorkflowFromModel(workflow)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse workflow: %w", err)
-	}
-
-	// 验证工作流
-	registry := s.engine.GetRegistry()
-	if err := s.parser.ValidateWorkflow(topology, registry); err != nil {
-		return nil, fmt.Errorf("workflow validation failed: %w", err)
-	}
-
-	// 创建执行记录
-	execution := &models.WorkflowExecution{
-		ID:             "exec-" + tools.RandId(),
-		WorkflowID:     workflow.ID,
-		WorkflowName:   workflow.Name,
-		Status:         "running",
-		StartedAt:      time.Now().Unix(),
-		NodeResults:    make(map[string]*models.NodeResult),
-		Variables:      make(map[string]any),
-		RunningNodes:   []string{},
-		CompletedNodes: []string{},
-		FailedNodes:    []string{},
-	}
-
-	// 记录工作流定义
-	workflowNodes := topology.Nodes
-	workflowEdges := topology.Edges
-
-	// 创建独立context用于工作流执行（不受HTTP请求取消影响）
-	execCtx := context.Background()
-
-	// 启动 goroutine 执行节点（耗时的节点执行在里面）
-	go func() {
-		// 发送工作流开始事件到SSE流（使用API中注册的通道）
-		s.monitor.EmitStreamWorkflowStarted(execution.ID, workflow.ID, workflow.Name)
-
-		defer func() {
-			if r := recover(); r != nil {
-				s.markExecutionFailed(execution, fmt.Sprintf("panic: %v", r))
-				s.saveExecutionRecord(execution)
-			}
-		}()
-
-		// 执行工作流（包含节点初始化和执行，忽略返回值因为初始化已在主线程完成）
-		_, executionErr := s.engine.Execute(execCtx, workflow, execution)
-		if executionErr != nil {
-			s.markExecutionFailed(execution, fmt.Sprintf("workflow execution failed: %v", executionErr))
-		} else {
-			s.markExecutionCompleted(execution)
-		}
-
-		// 保存执行记录到数据库
-		s.saveExecutionRecord(execution)
-	}()
-
-	// 关键：主线程同步调用 ExecuteInitOnly 完成节点状态初始化（快速，不执行节点）
-	// 这样 SSE 连接时 StateManager 中已有节点状态
-	s.engine.ExecuteInitOnly(execCtx, workflow, execution)
-
-	// 从 StateManager 读取当前节点状态
-	nodeStates := s.getNodeStatesMap(execution.ID)
-
-	// 转换为前端期望的格式（nodes/edges 为接口切片）
-	nodesIfc := make([]interface{}, len(workflowNodes))
-	for i, n := range workflowNodes {
-		nodesIfc[i] = map[string]interface{}{
-			"id":   n.ID,
-			"type": n.Type,
-			"data": n.Data,
-		}
-	}
-	edgesIfc := make([]interface{}, len(workflowEdges))
-	for i, e := range workflowEdges {
-		edgesIfc[i] = map[string]interface{}{
-			"source": e.Source,
-			"target": e.Target,
-		}
-	}
-
-	return &types.ResponseWorkflowExecute{
-		WorkflowExecution: *execution,
-		Nodes:             nodesIfc,
-		Edges:             edgesIfc,
-		NodeStates:        nodeStates,
-	}, nil
-}
-
-// StreamExecuteRequest 流式执行请求
-type StreamExecuteRequest struct {
-	WorkflowId string
-	Inputs     map[string]any // 输入变量
-}
-
-// StreamExecuteResult 流式执行结果
-type StreamExecuteResult struct {
-	TaskID     string                `json:"task_id"`
-	WorkflowID string                `json:"workflow_id"`
-	Workflow   workflow.WorkflowInfo `json:"workflow"`
-	Data       workflow.EventData    `json:"data"`
-}
-
-// StreamStyleEvent 流式SSE事件
-type StreamStyleEvent = workflow.StreamStyleEvent
-
-// StreamNodeInfo 流式节点信息
-type StreamNodeInfo = workflow.NodeInfo
-
-// StreamWorkflowInfo 流式工作流信息
-type StreamWorkflowInfo = workflow.WorkflowInfo
-
-// StreamEventData 流式事件数据
-type StreamEventData = workflow.EventData
-
-// ExecuteWorkflowStreamStyle 流式执行工作流
-// 1. 立即返回 task_id
-// 2. 通过 SSE channel 推送执行状态事件
-func (s *NewWorkflowService) ExecuteWorkflowStreamStyle(ctx context.Context, req *types.RequestWorkflowExecute) (*StreamExecuteResult, error) {
-	// 从数据库加载工作流
-	workflowModel, err := s.workflowRepo.GetByID(req.WorkflowId)
-	if err != nil {
-		return nil, fmt.Errorf("workflow not found: %s", req.WorkflowId)
-	}
-
-	// 解析工作流拓扑
-	topology, err := s.parser.ParseWorkflowFromModel(workflowModel)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse workflow: %w", err)
-	}
-
-	// 验证工作流
-	registry := s.engine.GetRegistry()
-	if err := s.parser.ValidateWorkflow(topology, registry); err != nil {
-		return nil, fmt.Errorf("workflow validation failed: %w", err)
-	}
-
-	// 创建执行记录
-	execution := &models.WorkflowExecution{
-		ID:             "exec-" + tools.RandId(),
-		WorkflowID:     workflowModel.ID,
-		WorkflowName:   workflowModel.Name,
-		Status:         "running",
-		StartedAt:      time.Now().Unix(),
-		NodeResults:    make(map[string]*models.NodeResult),
-		Variables:      make(map[string]any),
-		RunningNodes:   []string{},
-		CompletedNodes: []string{},
-		FailedNodes:    []string{},
-	}
-
-	// 记录工作流定义
-	workflowNodes := topology.Nodes
-	workflowEdges := topology.Edges
-
-	// 创建独立context用于工作流执行（不受HTTP请求取消影响）
-	execCtx := context.Background()
-
-	// 注册 SSE 事件通道（在goroutine之前注册，避免竞争）
-	eventCh := make(chan *StreamStyleEvent, 100)
-	eventCh = s.monitor.RegisterEventSSEEventChannel(execution.ID, eventCh)
-	// 注意：不在此处 defer 注销，而是在 goroutine 完成后再注销
-
-	// 启动 goroutine 执行节点（耗时的节点执行在里面）
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				s.markExecutionFailed(execution, fmt.Sprintf("panic: %v", r))
-				s.saveExecutionRecord(execution)
-			}
-		}()
-
-		// 执行工作流
-		_, err := s.engine.Execute(execCtx, workflowModel, execution)
-		if err != nil {
-			s.markExecutionFailed(execution, fmt.Sprintf("workflow execution failed: %v", err))
-		} else {
-			s.markExecutionCompleted(execution)
-		}
-
-		// 保存执行记录到数据库
-		s.saveExecutionRecord(execution)
-	}()
-
-	// 主线程同步调用 ExecuteInitOnly 完成节点状态初始化（快速，不执行节点）
-	// 这样 SSE 连接时 StateManager 中已有节点状态
-	s.engine.ExecuteInitOnly(execCtx, workflowModel, execution)
-
-	// 转换为前端期望的格式（nodes/edges 为接口切片）
-	nodesIfc := make([]interface{}, len(workflowNodes))
-	for i, n := range workflowNodes {
-		nodesIfc[i] = map[string]interface{}{
-			"id":   n.ID,
-			"type": n.Type,
-			"data": n.Data,
-		}
-	}
-	edgesIfc := make([]interface{}, len(workflowEdges))
-	for i, e := range workflowEdges {
-		edgesIfc[i] = map[string]interface{}{
-			"source": e.Source,
-			"target": e.Target,
-		}
-	}
-
-	return &StreamExecuteResult{
-		TaskID:     execution.ID,
-		WorkflowID: workflowModel.ID,
-		Workflow: StreamWorkflowInfo{
-			ID:   workflowModel.ID,
-			Name: workflowModel.Name,
-		},
-		Data: StreamEventData{
-			ID:            execution.ID,
-			WorkflowID:    workflowModel.ID,
-			WorkflowRunID: execution.ID,
-			Status:        "running",
-			NodeStates:    s.getNodeStatesMap(execution.ID),
-		},
-	}, nil
-}
-
 // saveExecutionRecord 保存执行记录到数据库
 func (s *NewWorkflowService) saveExecutionRecord(execution *models.WorkflowExecution) error {
 	// 序列化节点结果
@@ -409,44 +179,6 @@ func (s *NewWorkflowService) markExecutionCompleted(execution *models.WorkflowEx
 
 	// 发送工作流完成事件到SSE流
 	s.monitor.EmitStreamWorkflowCompleted(execution.ID, execution.WorkflowID, execution.WorkflowName, "completed")
-}
-
-// ValidateWorkflow 验证工作流
-func (s *NewWorkflowService) ValidateWorkflow(ctx context.Context, req *types.RequestWorkflowValidate) error {
-	log.Printf("[WorkflowService] Validating workflow with %d nodes and %d edges", len(req.Nodes), len(req.Edges))
-
-	// 转换为拓扑结构
-	nodes := make([]workflow.WorkflowNode, len(req.Nodes))
-	for i, node := range req.Nodes {
-		// 转换NodeData到map[string]interface{}
-		data := make(map[string]interface{})
-		if node.Data.Type != "" {
-			data["type"] = node.Data.Type
-		}
-
-		nodes[i] = workflow.WorkflowNode{
-			ID:   node.ID,
-			Type: node.Type,
-			Data: data,
-		}
-	}
-
-	edges := make([]workflow.WorkflowEdge, len(req.Edges))
-	for i, edge := range req.Edges {
-		edges[i] = workflow.WorkflowEdge{
-			Source: edge.Source,
-			Target: edge.Target,
-		}
-	}
-
-	topology := &workflow.WorkflowTopology{
-		Nodes: nodes,
-		Edges: edges,
-	}
-
-	// 验证工作流
-	registry := s.engine.GetRegistry()
-	return s.parser.ValidateWorkflow(topology, registry)
 }
 
 // GetWorkflowExecution 获取工作流执行结果
@@ -535,50 +267,6 @@ func (s *NewWorkflowService) CancelWorkflowExecution(ctx context.Context, execut
 	}
 
 	return nil
-}
-
-// GetNodeTypes 获取所有节点类型
-func (s *NewWorkflowService) GetNodeTypes(ctx context.Context) map[string]models.NodeDefinition {
-	log.Printf("[WorkflowService] Getting all node types")
-
-	registry := s.engine.GetRegistry()
-	return registry.GetAllDefinitions()
-}
-
-// GetNodeSchema 获取节点配置模式
-func (s *NewWorkflowService) GetNodeSchema(ctx context.Context, nodeType string) ([]models.FieldSchema, error) {
-	log.Printf("[WorkflowService] Getting node schema for: %s", nodeType)
-
-	registry := s.engine.GetRegistry()
-	return registry.GetSchema(nodeType)
-}
-
-// GetExecutionMetrics 获取执行指标
-func (s *NewWorkflowService) GetExecutionMetrics(ctx context.Context, executionID string) (*workflow.ExecutionMetrics, error) {
-	log.Printf("[WorkflowService] Getting execution metrics: %s", executionID)
-
-	return s.monitor.GetExecutionMetrics(executionID)
-}
-
-// GetNodeMetrics 获取节点指标
-func (s *NewWorkflowService) GetNodeMetrics(ctx context.Context, executionID, nodeID string) (*workflow.NodeMetrics, error) {
-	log.Printf("[WorkflowService] Getting node metrics: %s/%s", executionID, nodeID)
-
-	return s.monitor.GetNodeMetrics(executionID, nodeID)
-}
-
-// GetAllExecutions 获取所有执行指标
-func (s *NewWorkflowService) GetAllExecutions(ctx context.Context) map[string]*workflow.ExecutionMetrics {
-	log.Printf("[WorkflowService] Getting all executions")
-
-	return s.monitor.GetAllExecutions()
-}
-
-// ClearMonitoringData 清空监控数据
-func (s *NewWorkflowService) ClearMonitoringData(ctx context.Context) {
-	log.Printf("[WorkflowService] Clearing monitoring data")
-
-	s.monitor.Clear()
 }
 
 // ListWorkflows 获取工作流列表
@@ -1045,32 +733,26 @@ func (s *NewWorkflowService) Delete(id string) (data interface{}, err error) {
 	}, nil
 }
 
-// Execute 执行工作流
-func (s *NewWorkflowService) Execute(req interface{}) (data interface{}, err error) {
-	r := req.(*types.RequestWorkflowExecute)
-	return s.ExecuteWorkflow(context.Background(), r)
-}
-
 // ExecuteAsync 异步执行工作流，立即返回执行ID
 func (s *NewWorkflowService) ExecuteAsync(req interface{}) (data interface{}, err error) {
 	r := req.(*types.RequestWorkflowExecute)
 
 	// 从数据库加载工作流以验证存在性
-	workflow, err := s.workflowRepo.GetByID(r.WorkflowId)
+	wf, err := s.workflowRepo.GetByID(r.WorkflowId)
 	if err != nil {
 		return nil, fmt.Errorf("workflow not found: %s", r.WorkflowId)
 	}
 
 	// 将 input 参数注入到 Start 节点
-	if err := injectStartNodeInput(workflow, r.Input, r.Mode, r.RawBody); err != nil {
+	if err := injectStartNodeInput(wf, r.Input, r.Mode, r.RawBody); err != nil {
 		return nil, fmt.Errorf("bad request: %w", err)
 	}
 
 	// 创建执行记录
 	execution := &models.WorkflowExecution{
 		ID:             "exec-" + tools.RandId(),
-		WorkflowID:     workflow.ID,
-		WorkflowName:   workflow.Name,
+		WorkflowID:     wf.ID,
+		WorkflowName:   wf.Name,
 		Status:         "pending",
 		StartedAt:      time.Now().Unix(),
 		NodeResults:    make(map[string]*models.NodeResult),
@@ -1081,7 +763,7 @@ func (s *NewWorkflowService) ExecuteAsync(req interface{}) (data interface{}, er
 	}
 
 	// 注册 SSE 事件通道（让前端可以通过 SSE 接收节点执行事件）
-	s.monitor.RegisterEventSSEEventChannel(execution.ID, make(chan *StreamStyleEvent, 100))
+	s.monitor.RegisterEventSSEEventChannel(execution.ID, make(chan *workflow.StreamStyleEvent, 100))
 
 	// 启动异步执行
 	go func() {
@@ -1098,7 +780,7 @@ func (s *NewWorkflowService) ExecuteAsync(req interface{}) (data interface{}, er
 		}()
 
 		// 解析工作流拓扑
-		topology, err := s.parser.ParseWorkflowFromModel(workflow)
+		topology, err := s.parser.ParseWorkflowFromModel(wf)
 		if err != nil {
 			return
 		}
@@ -1110,7 +792,7 @@ func (s *NewWorkflowService) ExecuteAsync(req interface{}) (data interface{}, er
 		}
 
 		// 执行工作流（使用 execCtx，可被 CancelWorkflowExecution 取消）
-		_, executionErr := s.engine.Execute(execCtx, workflow, execution)
+		_, executionErr := s.engine.Execute(execCtx, wf, execution)
 		if executionErr != nil {
 			s.markExecutionFailed(execution, fmt.Sprintf("workflow execution failed: %v", executionErr))
 		} else {
@@ -1127,21 +809,16 @@ func (s *NewWorkflowService) ExecuteAsync(req interface{}) (data interface{}, er
 	// 立即返回执行ID
 	return map[string]interface{}{
 		"executionId": execution.ID,
-		"workflowId":  workflow.ID,
+		"workflowId":  wf.ID,
 		"status":      "pending",
 		"message":     "Workflow execution started",
 	}, nil
 }
 
-// GetStreamEventChannel 获取流式执行的 SSE 事件通道
-func (s *NewWorkflowService) GetStreamEventChannel(executionId string) chan *StreamStyleEvent {
-	return s.monitor.GetStreamEventChannel(executionId)
-}
-
 // RegisterEventSSEEventChannel 注册流式 SSE 事件通道
-func (s *NewWorkflowService) RegisterEventSSEEventChannel(executionId string) chan *StreamStyleEvent {
+func (s *NewWorkflowService) RegisterEventSSEEventChannel(executionId string) chan *workflow.StreamStyleEvent {
 	// 直接调用 monitor 的方法，它会处理 channel 复用逻辑
-	eventCh := make(chan *StreamStyleEvent, 100)
+	eventCh := make(chan *workflow.StreamStyleEvent, 100)
 	return s.monitor.RegisterEventSSEEventChannel(executionId, eventCh)
 }
 
@@ -1418,34 +1095,4 @@ func (s *NewWorkflowService) DeleteRunHistory(executionId string) (data interfac
 		"message":     "Run history deleted successfully",
 		"executionId": executionId,
 	}, nil
-}
-
-// getNodeStatesMap 从 StateManager 获取当前节点状态快照
-// 返回 map[nodeId]state，用于直接返回给前端刷新 UI
-func (s *NewWorkflowService) getNodeStatesMap(executionId string) map[string]string {
-	workflowState, err := s.stateManager.GetWorkflowState(executionId)
-	if err != nil {
-		return make(map[string]string)
-	}
-
-	nodeStates := make(map[string]string)
-	for nodeID, nodeState := range workflowState.NodeStates {
-		nodeStates[nodeID] = string(nodeState.State)
-	}
-	return nodeStates
-}
-
-// RegisterSSEEventChannel 注册 SSE 事件通道，返回该通道
-// SSE handler 通过此通道接收实时节点状态事件
-func (s *NewWorkflowService) RegisterSSEEventChannel(executionId string) chan *workflow.ExecutionEvent {
-	eventCh := make(chan *workflow.ExecutionEvent, 100)
-	s.monitor.RegisterEventChannel(executionId, eventCh)
-	log.Printf("[WorkflowService] SSE channel REGISTERED for execution: %s", executionId)
-	return eventCh
-}
-
-// UnregisterSSEEventChannel 取消注册 SSE 事件通道
-func (s *NewWorkflowService) UnregisterSSEEventChannel(executionId string) {
-	s.monitor.UnregisterEventChannel(executionId)
-	log.Printf("[WorkflowService] SSE channel UNREGISTERED for execution: %s", executionId)
 }

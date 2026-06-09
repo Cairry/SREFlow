@@ -73,12 +73,6 @@ func (e *WorkflowEngine) Execute(ctx context.Context, workflow *models.Workflow,
 	return e.ExecuteWithNodes(ctx, workflow, execution, true)
 }
 
-// ExecuteInitOnly 仅初始化节点状态（同步，不执行节点）
-// 用于在启动 goroutine 之前预初始化，让 SSE 连接时 StateManager 已有数据
-func (e *WorkflowEngine) ExecuteInitOnly(ctx context.Context, workflow *models.Workflow, execution *models.WorkflowExecution) (*models.WorkflowExecution, error) {
-	return e.ExecuteWithNodes(ctx, workflow, execution, false)
-}
-
 // ExecuteWithNodes 内部实现
 func (e *WorkflowEngine) ExecuteWithNodes(ctx context.Context, workflow *models.Workflow, execution *models.WorkflowExecution, executeNodes bool) (*models.WorkflowExecution, error) {
 	// 解析工作流拓扑
@@ -106,7 +100,7 @@ func (e *WorkflowEngine) ExecuteWithNodes(ctx context.Context, workflow *models.
 		}
 	}
 
-	// 检查是否已初始化（ExecuteInitOnly 已初始化过，跳过）
+	// 检查是否已初始化（重复调用时跳过）
 	_, stateExists := e.stateManager.CheckWorkflowState(execution.ID)
 
 	// 仅在未初始化时创建状态

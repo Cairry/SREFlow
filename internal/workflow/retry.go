@@ -7,32 +7,32 @@ import (
 
 // RetryPolicy 重试策略
 type RetryPolicy struct {
-	maxRetries   int
-	baseDelay    time.Duration
-	maxDelay     time.Duration
-	backoffType  BackoffType
-	multiplier   float64
-	jitter       bool
+	maxRetries  int
+	baseDelay   time.Duration
+	maxDelay    time.Duration
+	backoffType BackoffType
+	multiplier  float64
+	jitter      bool
 }
 
 // BackoffType 退避策略类型
 type BackoffType string
 
 const (
-	BackoffTypeFixed     BackoffType = "fixed"      // 固定延迟
-	BackoffTypeLinear    BackoffType = "linear"     // 线性退避
+	BackoffTypeFixed       BackoffType = "fixed"       // 固定延迟
+	BackoffTypeLinear      BackoffType = "linear"      // 线性退避
 	BackoffTypeExponential BackoffType = "exponential" // 指数退避
 )
 
 // NewRetryPolicy 创建新的重试策略
 func NewRetryPolicy(config *EngineConfig) *RetryPolicy {
 	return &RetryPolicy{
-		maxRetries:   config.MaxRetries,
-		baseDelay:    config.RetryDelay,
-		maxDelay:     config.RetryDelay * 10, // 最大延迟为基础延迟的10倍
-		backoffType:  BackoffTypeExponential,
-		multiplier:   2.0,
-		jitter:       true,
+		maxRetries:  config.MaxRetries,
+		baseDelay:   config.RetryDelay,
+		maxDelay:    config.RetryDelay * 10, // 最大延迟为基础延迟的10倍
+		backoffType: BackoffTypeExponential,
+		multiplier:  2.0,
+		jitter:      true,
 	}
 }
 
@@ -102,82 +102,4 @@ func isNonRetryableError(err error) bool {
 	// 例如：配置错误、认证错误等不应该重试
 	// 暂时返回false，表示所有错误都可以重试
 	return false
-}
-
-// WithFixedDelay 设置固定延迟
-func (rp *RetryPolicy) WithFixedDelay(delay time.Duration) *RetryPolicy {
-	rp.backoffType = BackoffTypeFixed
-	rp.baseDelay = delay
-	return rp
-}
-
-// WithLinearBackoff 设置线性退避
-func (rp *RetryPolicy) WithLinearBackoff(delay time.Duration) *RetryPolicy {
-	rp.backoffType = BackoffTypeLinear
-	rp.baseDelay = delay
-	return rp
-}
-
-// WithExponentialBackoff 设置指数退避
-func (rp *RetryPolicy) WithExponentialBackoff(delay time.Duration, multiplier float64) *RetryPolicy {
-	rp.backoffType = BackoffTypeExponential
-	rp.baseDelay = delay
-	rp.multiplier = multiplier
-	return rp
-}
-
-// WithMaxDelay 设置最大延迟
-func (rp *RetryPolicy) WithMaxDelay(maxDelay time.Duration) *RetryPolicy {
-	rp.maxDelay = maxDelay
-	return rp
-}
-
-// WithMaxRetries 设置最大重试次数
-func (rp *RetryPolicy) WithMaxRetries(maxRetries int) *RetryPolicy {
-	rp.maxRetries = maxRetries
-	return rp
-}
-
-// WithJitter 设置是否启用抖动
-func (rp *RetryPolicy) WithJitter(jitter bool) *RetryPolicy {
-	rp.jitter = jitter
-	return rp
-}
-
-// RetryableError 可重试错误包装
-type RetryableError struct {
-	Err       error
-	Retryable bool
-}
-
-func (e *RetryableError) Error() string {
-	return e.Err.Error()
-}
-
-func (e *RetryableError) Unwrap() error {
-	return e.Err
-}
-
-// NewRetryableError 创建可重试错误
-func NewRetryableError(err error) *RetryableError {
-	return &RetryableError{
-		Err:       err,
-		Retryable: true,
-	}
-}
-
-// NewNonRetryableError 创建不可重试错误
-func NewNonRetryableError(err error) *RetryableError {
-	return &RetryableError{
-		Err:       err,
-		Retryable: false,
-	}
-}
-
-// IsRetryable 判断错误是否可重试
-func IsRetryable(err error) bool {
-	if retryErr, ok := err.(*RetryableError); ok {
-		return retryErr.Retryable
-	}
-	return true // 默认可重试
 }
