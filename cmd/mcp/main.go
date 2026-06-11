@@ -20,7 +20,7 @@ type Config struct {
 }
 
 const (
-	baseURL = "http://localhost:9001/api"
+	baseURL = "http://localhost:9002/api"
 )
 
 var httpClient = &http.Client{
@@ -28,7 +28,7 @@ var httpClient = &http.Client{
 }
 
 func main() {
-	transport := flag.String("transport", "streamable-http", "Transport type: sse or streamable-http")
+	transport := flag.String("transport", "sse", "Transport type: sse or streamable-http")
 	addr := flag.String("addr", ":8088", "Listen address")
 	flag.Parse()
 

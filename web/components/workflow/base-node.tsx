@@ -29,6 +29,7 @@ import {
   Route,
   Container,
   Terminal,
+  Bot,
 } from "lucide-react";
 import { useReactFlow } from "@xyflow/react";
 
@@ -48,6 +49,7 @@ const ICONS: Record<WorkflowNodeType, React.ReactNode> = {
   GoScript: <Code className="w-4 h-4" />,
   HTTP: <Globe className="w-4 h-4" />,
   MCP: <Puzzle className="w-4 h-4" />,
+  Agent: <Bot className="w-4 h-4" />,
 };
 
 const STATUS_ICONS: Record<NodeRunStatus, React.ReactNode> = {

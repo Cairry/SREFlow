@@ -25,4 +25,7 @@ func Register(engine *gin.Engine) {
 
 	// MCP Server routes
 	api.MCPController.API(group)
+
+	// Skill routes
+	api.SkillController.API(group)
 }

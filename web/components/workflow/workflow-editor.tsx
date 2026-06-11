@@ -13,7 +13,7 @@ import {
   type OnEdgesChange,
 } from "@xyflow/react";
 
-import type { WorkflowNodeType, WorkflowNode, NodeRunStatus, ExecutionSSEEvent } from "@/lib/workflow-types";
+import type { WorkflowNodeType, WorkflowNode, NodeRunStatus, ExecutionSSEEvent, WorkflowExecution, ExecutionResult } from "@/lib/workflow-types";
 import { generateNodeId } from "@/lib/node-id-generator";
 import { adaptSnapshotToNodeStatuses } from "@/lib/state-adapter";
 import { WorkflowCanvas, defaultNodeData } from "./workflow-canvas";
@@ -26,6 +26,7 @@ import { NodeEditPanel } from "./node-edit-panel";
 import { RunHistoryDialog, RunHistoryContent, RunDetails } from "./run-history-dialog";
 import { WorkflowVersionHistoryDialog } from "./workflow-version-history-dialog";
 import { ApiCallDialog } from "./api-call-dialog";
+import { AddNodeDialog } from "./add-node-dialog";
 import { workflowApi, API_BASE_URL, WorkflowVersion } from "@/lib/api/workflow";
 
 // Empty workflow template with default Start node
@@ -130,6 +131,7 @@ function WorkflowEditorInner({ workflowId: urlWorkflowId }: { workflowId?: Promi
 
     const [isSaving, setIsSaving] = useState(false);
   const [execution, setExecution] = useState<WorkflowExecution | null>(null);
+  const [nodeResults, setNodeResults] = useState<ExecutionResult[]>([]);
   const [showOutput, setShowOutput] = useState(false);
   const [showLoadDialog, setShowLoadDialog] = useState(false);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
@@ -152,6 +154,10 @@ function WorkflowEditorInner({ workflowId: urlWorkflowId }: { workflowId?: Promi
 
   // Run History 详情状态
   const [selectedRun, setSelectedRun] = useState<any>(null);
+
+  // Add Node 弹窗状态（右键 + 工具栏共享）
+  const [showAddNode, setShowAddNode] = useState(false);
+  const addNodePositionRef = React.useRef<{ x: number; y: number } | null>(null);
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -346,12 +352,15 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
         const eventData = JSON.parse(e.data);
         const node = nodes.find(n => n.id === eventData.node?.id);
         if (eventData.node?.id) {
+          // 去重：回放缓冲事件与实时通道可能有重叠
+          if (nodeResultsRef.current.some(r => r.nodeId === eventData.node.id)) return;
           const outputs = eventData.node.outputs || {};
           const outputValue = extractOutputValue(outputs);
           nodeResultsRef.current.push({
             nodeId: eventData.node.id,
             nodeType: toWorkflowNodeType(node?.type || "unknown"),
             output: outputValue as string | null,
+            outputs: outputs as Record<string, unknown>,
             timestamp: new Date(),
           });
           setNodeStatuses(prev => {
@@ -359,6 +368,8 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
             next.set(eventData.node.id, 'completed');
             return next;
           });
+          // 实时更新节点结果，让 OutputPanel 立即显示该节点输出
+          setNodeResults([...nodeResultsRef.current]);
         }
       } catch (err) {
         console.error('[SSE] node_completed parse error:', err);
@@ -370,6 +381,8 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
       try {
         const eventData = JSON.parse(e.data);
         if (eventData.node?.id) {
+          // 去重：回放缓冲事件与实时通道可能有重叠
+          if (nodeResultsRef.current.some(r => r.nodeId === eventData.node?.id)) return;
           const node = nodes.find(n => n.id === eventData.node?.id);
           nodeResultsRef.current.push({
             nodeId: eventData.node?.id,
@@ -383,6 +396,8 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
             next.set(eventData.node?.id, 'failed');
             return next;
           });
+          // 实时更新节点结果，让 OutputPanel 立即显示该节点错误
+          setNodeResults([...nodeResultsRef.current]);
         }
       } catch (err) {
         console.error('[SSE] node_failed parse error:', err);
@@ -591,7 +606,7 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
               const node = nodes.find(n => n.id === nodeId);
               const outputs = nodeResult.outputs || {};
               const outputValue = extractOutputValue(outputs);
-              return { nodeId, nodeType: toWorkflowNodeType(node?.type || "unknown"), output: outputValue, error: nodeResult.error, timestamp: new Date() };
+              return { nodeId, nodeType: toWorkflowNodeType(node?.type || "unknown"), output: outputValue, outputs: outputs as Record<string, unknown>, error: nodeResult.error, timestamp: new Date() };
             });
             setExecution({
               id: execData.id, workflowId: execData.workflowId, status: statusData.status,
@@ -714,6 +729,7 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
     setIsExecuting(true);
     setSidebarMode('progress');
     setExecution(null);
+    setNodeResults([]);
 
     // 前端直接计算孤立节点（无入边且无出边），不依赖 SSE 时序
     const inDegree = new Map<string, number>();
@@ -906,6 +922,15 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
             onOpenApiCall={() => setShowApiCallDialog(true)}
             hasChanges={hasChanges}
             showOutput={showOutput}
+            showAddNode={showAddNode}
+            onToggleAddNode={(buttonRect) => {
+              if (buttonRect) {
+                addNodePositionRef.current = { x: buttonRect.left, y: buttonRect.bottom + 8 };
+              } else {
+                addNodePositionRef.current = null;
+              }
+              setShowAddNode(v => !v);
+            }}
           />
 
           <div className="flex-1 flex min-h-0">
@@ -922,6 +947,10 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
                 setShowOutput(false);
               }}
               nodeStatuses={nodeStatuses}
+              onContextMenu={(pos) => {
+                addNodePositionRef.current = pos;
+                setShowAddNode(true);
+              }}
               onStartNodeBlocked={() => {
                 toast({
                   title: "Cannot add Start node",
@@ -933,7 +962,7 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
           </div>
 
           {selectedNode && !showOutput && (
-            <div className="w-80 border-workflow-border shrink-0 pl-3">
+            <div className="border-workflow-border shrink-0 pl-3" style={{ width: "25%" }}>
               <div className="h-full bg-workflow-node-bg rounded-l-xl border border-workflow-border/50 shadow-lg overflow-hidden">
                 <NodeEditPanel
                   node={selectedNode}
@@ -959,10 +988,11 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
           )}
 
           {sidebarMode === 'progress' && (execution || isExecuting) && (
-            <div className="w-80 border-workflow-border shrink-0 pl-3">
+            <div className="border-workflow-border shrink-0 pl-3" style={{ width: "25%" }}>
               <div className="h-full bg-workflow-node-bg rounded-l-xl border border-workflow-border/50 shadow-lg overflow-hidden">
                 <OutputPanel
                   execution={execution}
+                  nodeResults={nodeResults}
                   isExecuting={isExecuting}
                   onClose={() => {
                     setSidebarMode(null);
@@ -976,7 +1006,7 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
           )}
 
           {sidebarMode === 'history' && (
-            <div className="w-80 border-workflow-border shrink-0 pl-3">
+            <div className="border-workflow-border shrink-0 pl-3" style={{ width: "25%" }}>
               <div className="h-full bg-workflow-node-bg rounded-l-xl border border-workflow-border/50 shadow-lg overflow-hidden flex flex-col">
                 <div className="flex items-center justify-between p-3 border-b border-workflow-border">
                   <h2 className="font-mono text-sm font-semibold text-workflow-text">Run History</h2>
@@ -1043,6 +1073,16 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
         workflowId={workflowId}
         refreshTrigger={versionRefreshTrigger}
         onRestored={handleRestored}
+      />
+
+      <AddNodeDialog
+        isOpen={showAddNode}
+        onClose={() => setShowAddNode(false)}
+        onAddNode={(nodeType, mcpData) => {
+          handleAddNode(nodeType, mcpData);
+          setShowAddNode(false);
+        }}
+        position={addNodePositionRef.current || undefined}
       />
     </div>
   );

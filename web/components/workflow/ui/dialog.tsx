@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { createPortal } from "react-dom";
 import { X, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -246,9 +247,10 @@ interface MenuDialogProps {
   onClose: () => void;
   children: React.ReactNode;
   className?: string;
+  position?: { x: number; y: number };
 }
 
-export function MenuDialog({ isOpen, onClose, children, className }: MenuDialogProps) {
+export function MenuDialog({ isOpen, onClose, children, className, position }: MenuDialogProps) {
   const menuRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -266,15 +268,28 @@ export function MenuDialog({ isOpen, onClose, children, className }: MenuDialogP
 
   if (!isOpen) return null;
 
-  return (
+  const content = (
     <div
       ref={menuRef}
       className={cn(
         "z-50 bg-workflow-surface border border-workflow-border rounded-lg shadow-xl",
+        !position && "absolute",
         className
       )}
+      style={position ? {
+        position: 'fixed',
+        left: Math.min(position.x, window.innerWidth - 340),
+        top: position.y,
+        maxHeight: Math.min(420, window.innerHeight - position.y - 20),
+      } : undefined}
     >
       {children}
     </div>
   );
+
+  if (position) {
+    return createPortal(content, document.body);
+  }
+
+  return content;
 }

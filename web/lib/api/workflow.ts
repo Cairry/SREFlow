@@ -1,4 +1,4 @@
-export const API_BASE_URL = process.env.API_BASE_URL || "";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.API_BASE_URL || "";
 
 export interface WorkflowNode {
   id: string;
@@ -63,6 +63,7 @@ async function request<T>(
   if (result.code === 200 && result.data !== undefined) {
     return result.data as T;
   }
+  console.error("result.code ->",result.code);
 
   if (!response.ok) {
     throw new Error(result.msg || result.Message || `Request failed with status ${response.status}`);

@@ -15,7 +15,6 @@ import {
   type Connection,
   type Edge,
   type NodeTypes,
-  type Node,
   BackgroundVariant,
   type OnEdgesChange,
   type OnNodesChange,
@@ -41,6 +40,7 @@ import {
   GoScriptNode,
   HTTPNode,
   MCPNode,
+  AgentNode,
 } from "./nodes";
 
 const nodeTypes: NodeTypes = {
@@ -59,6 +59,7 @@ const nodeTypes: NodeTypes = {
   GoScript: GoScriptNode,
   HTTP: HTTPNode,
   MCP: MCPNode,
+  Agent: AgentNode,
 };
 
 export const defaultNodeData: Record<WorkflowNodeType, object> = {
@@ -155,6 +156,14 @@ export const defaultNodeData: Record<WorkflowNodeType, object> = {
     description: "",
     arguments: {},
   },
+  Agent: {
+    label: "Agent",
+    model: "",
+    prompt: "",
+    maxIterations: 10,
+    skillIds: [],
+    selectedTools: [],
+  },
 };
 
 interface WorkflowCanvasProps {
@@ -166,6 +175,7 @@ interface WorkflowCanvasProps {
   onNodesUpdate: (nodes: WorkflowNode[]) => void;
   onEdgesUpdate: (edges: Edge[]) => void;
   onNodeClick?: (node: WorkflowNode) => void;
+  onContextMenu?: (position: { x: number; y: number }) => void;
   nodeStatuses?: Map<string, NodeRunStatus>;
   onStartNodeBlocked?: () => void;
 }
@@ -178,6 +188,7 @@ export function WorkflowCanvas({
   onConnect,
   onNodesUpdate,
   onNodeClick,
+  onContextMenu,
   nodeStatuses,
   onStartNodeBlocked,
 }: WorkflowCanvasProps) {
@@ -208,6 +219,11 @@ export function WorkflowCanvas({
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
   }, []);
+
+  const handlePaneContextMenu = useCallback((event: MouseEvent | React.MouseEvent) => {
+    event.preventDefault();
+    onContextMenu?.({ x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY });
+  }, [onContextMenu]);
 
   const onDrop = useCallback(
     (event: React.DragEvent) => {
@@ -288,11 +304,11 @@ export function WorkflowCanvas({
         onConnect={handleConnect}
         onNodeClick={handleNodeClick}
         onPaneClick={() => {
-          // Clear selection when clicking on the canvas
           if (onNodeClick) {
             onNodeClick(null as any);
           }
         }}
+        onPaneContextMenu={handlePaneContextMenu}
         nodeTypes={nodeTypes}
         fitView
         fitViewOptions={{

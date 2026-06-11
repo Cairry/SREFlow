@@ -13,3 +13,4 @@ export { StartNode } from "./start-node";
 export { GoScriptNode } from "./goscript-node";
 export { HTTPNode } from "./http-node";
 export { MCPNode } from "./mcp-node";
+export { AgentNode } from "./agent-node";

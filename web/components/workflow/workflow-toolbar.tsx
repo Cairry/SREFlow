@@ -2,7 +2,6 @@
 
 import React from "react"
 
-import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import {
   LayoutGrid,
@@ -20,7 +19,6 @@ import {
   Terminal,
   History,
 } from "lucide-react";
-import { AddNodeDialog } from "./add-node-dialog";
 import type { WorkflowNode, WorkflowNodeType } from "@/lib/workflow-types";
 import type { Edge } from "@xyflow/react";
 
@@ -42,6 +40,8 @@ interface WorkflowToolbarProps {
   isSaving: boolean;
   hasChanges: boolean;
   showOutput: boolean;
+  showAddNode: boolean;
+  onToggleAddNode: (buttonRect?: DOMRect) => void;
 }
 
 function ButtonGroup({ children }: { children: React.ReactNode }) {
@@ -101,9 +101,9 @@ export function WorkflowToolbar({
   isSaving,
   hasChanges,
   showOutput,
+  showAddNode,
+  onToggleAddNode,
 }: WorkflowToolbarProps) {
-  const [showAddNode, setShowAddNode] = useState(false);
-
   return (
     <div className="h-14 flex items-center justify-center px-4 transition-colors duration-200">
       <div className="flex items-center gap-6">
@@ -125,19 +125,15 @@ export function WorkflowToolbar({
             <ButtonGroup>
               <IconButton
                 icon={<Plus className="w-4 h-4" />}
-                onClick={() => setShowAddNode(!showAddNode)}
+                onClick={() => {
+                  const btn = document.querySelector('[title="Add node"]');
+                  const rect = btn?.getBoundingClientRect();
+                  onToggleAddNode(rect);
+                }}
                 title="Add node"
                 active={showAddNode}
               />
             </ButtonGroup>
-            <AddNodeDialog
-              isOpen={showAddNode}
-              onClose={() => setShowAddNode(false)}
-              onAddNode={(nodeType, mcpData) => {
-                onAddNode(nodeType, mcpData);
-                setShowAddNode(false);
-              }}
-            />
           </div>
 
           {/* Auto Layout */}

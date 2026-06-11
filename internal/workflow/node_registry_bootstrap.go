@@ -6,7 +6,7 @@ import (
 )
 
 // BootstrapNodeRegistry 初始化节点注册器
-func BootstrapNodeRegistry(mcpRepo repos.MCPServerRepoInter) *NodeRegistry {
+func BootstrapNodeRegistry(mcpRepo repos.MCPServerRepoInter, skillRepo repos.SkillRepoInter) *NodeRegistry {
 	registry := NewNodeRegistry()
 
 	// 注册数据节点
@@ -25,6 +25,7 @@ func BootstrapNodeRegistry(mcpRepo repos.MCPServerRepoInter) *NodeRegistry {
 	registry.Register(nodes.NewSmartRouterExecutor())
 	registry.Register(nodes.NewGoScriptExecutor())
 	registry.Register(nodes.NewMCPToolExecutor(mcpRepo))
+	registry.Register(nodes.NewAgentExecutor(mcpRepo, skillRepo))
 
 	// 注册输入输出节点
 	registry.Register(nodes.NewStartExecutor())

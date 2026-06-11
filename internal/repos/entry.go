@@ -6,13 +6,14 @@ import (
 
 type (
 	entry struct {
-		mysql      *gorm.DB
-		gorm       InterGormClient
-		topo       InterTopologyRepo
-		workflow   WorkflowRepoInter
-		workspace  WorkspaceRepoInter
+		mysql       *gorm.DB
+		gorm        InterGormClient
+		topo        InterTopologyRepo
+		workflow    WorkflowRepoInter
+		workspace   WorkspaceRepoInter
 		integration IntegrationRepoInter
-		mcpServer  MCPServerRepoInter
+		mcpServer   MCPServerRepoInter
+		skill       SkillRepoInter
 	}
 
 	EntryInter interface {
@@ -23,17 +24,19 @@ type (
 		Workspace() WorkspaceRepoInter
 		Integration() IntegrationRepoInter
 		MCPServer() MCPServerRepoInter
+		Skill() SkillRepoInter
 	}
 )
 
 func NewEntryRepo(db *gorm.DB) EntryInter {
 	return &entry{
-		mysql:      db,
-		gorm:       NewGormClient(db),
-		workflow:   NewWorkflowRepo(db),
-		workspace:  NewGormWorkspaceRepo(db),
+		mysql:       db,
+		gorm:        NewGormClient(db),
+		workflow:    NewWorkflowRepo(db),
+		workspace:   NewGormWorkspaceRepo(db),
 		integration: NewGormIntegrationRepo(db),
-		mcpServer:  NewGormMCPServerRepo(db),
+		mcpServer:   NewGormMCPServerRepo(db),
+		skill:       NewGormSkillRepo(db),
 	}
 }
 
@@ -70,4 +73,9 @@ func (e *entry) Integration() IntegrationRepoInter {
 // MCPServer returns the MCP server repository
 func (e *entry) MCPServer() MCPServerRepoInter {
 	return e.mcpServer
+}
+
+// Skill returns the Skill repository
+func (e *entry) Skill() SkillRepoInter {
+	return e.skill
 }

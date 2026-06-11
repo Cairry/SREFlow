@@ -71,7 +71,7 @@ export function ApiCallDialog({
   if (!isOpen) return null;
 
   const baseUrl = API_BASE_URL;
-  const wsId = "YOUR_WORKSPACE_ID";
+  const wsId = localStorage.getItem("flowforge-current-workspace-id") || "xxxxxxxxxxxxx";
   const execId = "exec-xxxxxxxxxxxx"; // 执行 ID，从 execute 接口获取
 
   const executeCurl = workflowId
@@ -147,7 +147,7 @@ export function ApiCallDialog({
                   <td className="px-3 py-2 text-violet-400">X-Workspace-Id</td>
                   <td className="px-3 py-2 text-workflow-text-muted">header</td>
                   <td className="px-3 py-2 text-emerald-400">string</td>
-                  <td className="px-3 py-2 text-workflow-text-muted">工作空间 ID (必填)</td>
+                  <td className="px-3 py-2 text-workflow-text">{wsId}</td>
                 </tr>
                 <tr>
                   <td className="px-3 py-2 text-violet-400">input</td>

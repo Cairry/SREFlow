@@ -181,8 +181,17 @@ func (s *MCPService) ListTools(c context.Context, id string) (interface{}, error
 
 	result, err := client.ListTools(c, mcp.ListToolsRequest{})
 	if err != nil {
+		log.Printf("[MCPService] ListTools failed for %s (%s): %v, removing stale session and retrying...", server.Name, id, err)
 		mcppool.DefaultMCPPool.RemoveClient(id)
-		return nil, fmt.Errorf("failed to list tools: %w", err)
+		client, err = mcppool.DefaultMCPPool.GetOrCreateClient(c, id, server.URL, server.Type, headers, server.APIKey, server.Timeout)
+		if err != nil {
+			return nil, fmt.Errorf("failed to reconnect to MCP server: %w", err)
+		}
+		result, err = client.ListTools(c, mcp.ListToolsRequest{})
+		if err != nil {
+			mcppool.DefaultMCPPool.RemoveClient(id)
+			return nil, fmt.Errorf("failed to list tools after retry: %w", err)
+		}
 	}
 
 	tools := make([]map[string]interface{}, 0, len(result.Tools))
@@ -241,8 +250,22 @@ func (s *MCPService) CallTool(c context.Context, id string, toolName string, arg
 		},
 	})
 	if err != nil {
+		log.Printf("[MCPService] CallTool failed for %s on %s (%s): %v, removing stale session and retrying...", toolName, server.Name, id, err)
 		mcppool.DefaultMCPPool.RemoveClient(id)
-		return nil, fmt.Errorf("failed to call tool %s: %w", toolName, err)
+		client, err = mcppool.DefaultMCPPool.GetOrCreateClient(c, id, server.URL, server.Type, headers, server.APIKey, server.Timeout)
+		if err != nil {
+			return nil, fmt.Errorf("failed to reconnect to MCP server: %w", err)
+		}
+		result, err = client.CallTool(c, mcp.CallToolRequest{
+			Params: mcp.CallToolParams{
+				Name:      toolName,
+				Arguments: args,
+			},
+		})
+		if err != nil {
+			mcppool.DefaultMCPPool.RemoveClient(id)
+			return nil, fmt.Errorf("failed to call tool %s after retry: %w", toolName, err)
+		}
 	}
 
 	// Build response from CallToolResult
@@ -298,11 +321,22 @@ func (s *MCPService) GetStatus(c context.Context, id string) (interface{}, error
 	}
 
 	if err := client.Ping(c); err != nil {
+		log.Printf("[MCPService] Ping failed for %s (%s): %v, removing stale session and retrying...", server.Name, id, err)
 		mcppool.DefaultMCPPool.RemoveClient(id)
-		return map[string]interface{}{
-			"connected": false,
-			"message":   err.Error(),
-		}, nil
+		client, err = mcppool.DefaultMCPPool.GetOrCreateClient(c, id, server.URL, server.Type, headers, server.APIKey, server.Timeout)
+		if err != nil {
+			return map[string]interface{}{
+				"connected": false,
+				"message":   err.Error(),
+			}, nil
+		}
+		if err := client.Ping(c); err != nil {
+			mcppool.DefaultMCPPool.RemoveClient(id)
+			return map[string]interface{}{
+				"connected": false,
+				"message":   err.Error(),
+			}, nil
+		}
 	}
 
 	return map[string]interface{}{
@@ -358,5 +392,8 @@ func (s *MCPService) probeEndpoint(url string) error {
 	}
 	resp.Body.Close()
 	log.Printf("[MCPService] Probe endpoint %s returned HTTP %d", url, resp.StatusCode)
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("HTTP probe returned status %d — the MCP SSE endpoint URL may be incorrect (SSE servers typically require a path such as /sse)", resp.StatusCode)
+	}
 	return nil
 }

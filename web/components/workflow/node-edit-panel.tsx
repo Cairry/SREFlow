@@ -15,8 +15,9 @@ import { useToast } from "@/hooks/use-toast";
 import { VariablePicker, useVariablePickerShortcuts } from "./variable-picker";
 import { ChevronDown, ChevronRight, Variable, Sparkles, Braces, Maximize2, Minimize2 } from "lucide-react";
 import { Loader2 } from "lucide-react";
-import { mcpApi } from "@/lib/api/mcp";
+import { mcpApi, type MCPServer, type MCPServerTool } from "@/lib/api/mcp";
 import { integrationApi } from "@/lib/api/integration";
+import { skillApi, type Skill } from "@/lib/api/skill";
 
 // Node output variables definition
 export const NODE_OUTPUT_VARIABLES: Record<string, { name: string; type: string; description: string }[]> = {
@@ -92,6 +93,11 @@ export const NODE_OUTPUT_VARIABLES: Record<string, { name: string; type: string;
     { name: "output", type: "string", description: "MCP tool execution result" },
     { name: "error", type: "string", description: "Error message if execution failed" },
   ],
+  Agent: [
+    { name: "output", type: "string", description: "Agent final response text" },
+    { name: "iterations", type: "int", description: "Number of ReAct iterations" },
+    { name: "toolCalls", type: "array", description: "Array of tool call records" },
+  ],
 };
 
 interface NodeEditPanelProps {
@@ -104,7 +110,6 @@ interface NodeEditPanelProps {
 
 export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEditPanelProps) {
   const { toast } = useToast();
-  const [showOutputVars, setShowOutputVars] = useState(false);
   const [beautifyingSystem, setBeautifyingSystem] = useState(false);
   const [beautifyingPrompt, setBeautifyingPrompt] = useState(false);
   const [activePicker, setActivePicker] = useState<string | null>(null);
@@ -113,6 +118,11 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
   const [activeTextPicker, setActiveTextPicker] = useState<string | null>(null);
   const [goscriptModalOpen, setGoscriptModalOpen] = useState(false);
   const [goscriptModalCode, setGoscriptModalCode] = useState("");
+  const [availableSkills, setAvailableSkills] = useState<Skill[]>([]);
+  const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
+  const [mcpServerTools, setMcpServerTools] = useState<Record<string, MCPServerTool[]>>({});
+  const [loadingMcpTools, setLoadingMcpTools] = useState<Record<string, boolean>>({});
+  const [expandedMcpServer, setExpandedMcpServer] = useState<string | null>(null);
 
   const systemPromptRef = useRef<HTMLTextAreaElement>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
@@ -259,6 +269,30 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
       .catch(() => setMcpInputSchema(null))
       .finally(() => setLoadingMcpSchema(false));
   }, [node?.id, node?.type, (node?.data as Record<string, unknown>)?.serverId, (node?.data as Record<string, unknown>)?.toolName]);
+
+  // Load available skills for Agent node
+  useEffect(() => {
+    skillApi.list()
+      .then((data) => setAvailableSkills((data.skills || []).filter((s: Skill) => s.enabled)))
+      .catch(() => setAvailableSkills([]));
+  }, []);
+
+  // Load MCP servers for Agent node
+  useEffect(() => {
+    mcpApi.list()
+      .then((data) => setMcpServers((data.servers || []).filter((s: MCPServer) => s.enabled)))
+      .catch(() => setMcpServers([]));
+  }, []);
+
+  // Load tools for expanded MCP server (Agent node)
+  useEffect(() => {
+    if (!expandedMcpServer || mcpServerTools[expandedMcpServer]) return;
+    setLoadingMcpTools(prev => ({ ...prev, [expandedMcpServer]: true }));
+    mcpApi.listTools(expandedMcpServer)
+      .then((data) => setMcpServerTools(prev => ({ ...prev, [expandedMcpServer]: data.tools || [] })))
+      .catch(() => {})
+      .finally(() => setLoadingMcpTools(prev => ({ ...prev, [expandedMcpServer]: false })));
+  }, [expandedMcpServer, mcpServerTools]);
 
   const beautifyPrompt = async (field: "systemPrompt" | "prompt", currentValue: string) => {
     if (!currentValue.trim()) return;
@@ -621,7 +655,6 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
       {/* ClickHouse Node */}
       {node.type === "ClickHouse" && (
         <>
-
           <div>
             <label className={labelClass}>Database</label>
             <input
@@ -662,7 +695,6 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
       {/* SSH Node */}
       {node.type === "SSH" && (
         <>
-
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className={labelClass + " mb-0"}>Host</label>
@@ -757,7 +789,6 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
       {/* Kubernetes Node */}
       {node.type === "Kubernetes" && (
         <>
-
           <K8sNamespaceSelector
             namespace={safeGetValue("namespace", "")}
             onNamespaceChange={(val) => handleChange("namespace", val)}
@@ -1344,6 +1375,76 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
         </>
       )}
 
+      {/* Agent Node */}
+      {node.type === "Agent" && (
+        <>
+          <div>
+            <label className={labelClass}>Model</label>
+            <ModelSelector value={safeGetValue("model", "") as string} onChange={(v) => handleChange("model", v)} />
+          </div>
+
+          <div>
+            <label className={labelClass}>Max Iterations</label>
+            <input
+              type="number"
+              min={1}
+              max={50}
+              value={safeGetValue("maxIterations", 10) as number}
+              onChange={(e) => handleChange("maxIterations", parseInt(e.target.value) || 10)}
+              className={inputClass}
+            />
+          </div>
+
+          <div>
+            <label className={labelClass}>Skills</label>
+            <SkillSelector
+              selectedIds={(safeGetValue("skillIds", []) as string[]) || []}
+              onChange={(ids) => handleChange("skillIds", ids)}
+              skills={availableSkills}
+            />
+          </div>
+
+          <div>
+            <label className={labelClass}>MCP Tools</label>
+            <MCPToolSelector
+              selectedTools={(safeGetValue("selectedTools", []) as string[]) || []}
+              onChange={(tools) => handleChange("selectedTools", tools)}
+              servers={mcpServers}
+              serverTools={mcpServerTools}
+              loadingTools={loadingMcpTools}
+              expandedServer={expandedMcpServer}
+              onExpandServer={setExpandedMcpServer}
+            />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className={labelClass + " mb-0"}>Prompt</label>
+              <div className="flex items-center gap-1">
+                <VariablePicker
+                  nodes={nodes}
+                  edges={edges}
+                  currentNodeId={node.id}
+                  onInsert={(ref) => insertVariable("prompt", ref)}
+                  trigger={
+                    <button type="button" className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono text-workflow-text-muted border border-workflow-border rounded hover:bg-workflow-surface-hover transition-colors duration-200">
+                      <Braces className="h-3 w-3" />
+                      Vars
+                    </button>
+                  }
+                />
+              </div>
+            </div>
+            <textarea
+              value={safeGetValue('prompt', '')}
+              onChange={(e) => handleChange("prompt", e.target.value)}
+              placeholder="User prompt for the agent..."
+              className={`${textareaClass} h-20`}
+            />
+          </div>
+        </>
+      )}
+
       {/* Output Variables Section */}
       {node.type !== "Output" && (
         <div className="border-t border-workflow-border pt-4 mt-4">
@@ -1755,6 +1856,162 @@ function SmartRouterBranchEditor({ branches, onChange }: {
           Only the selected branch will execute; others will be skipped.
         </p>
       )}
+    </div>
+  );
+}
+
+// SkillSelector — multi-select skills for Agent node
+function SkillSelector({ selectedIds, onChange, skills }: {
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
+  skills: Skill[];
+}) {
+  const toggleSkill = (id: string) => {
+    if (selectedIds.includes(id)) {
+      onChange(selectedIds.filter((sid) => sid !== id));
+    } else {
+      onChange([...selectedIds, id]);
+    }
+  };
+
+  if (skills.length === 0) {
+    return (
+      <div className="text-xs text-workflow-text-muted font-mono py-2">
+        No skills available. Create skills in the Skills page first.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1.5 max-h-32 overflow-y-auto">
+      {skills.map((skill) => (
+        <label
+          key={skill.id}
+          className="flex items-center gap-2 px-2 py-1.5 rounded-lg border border-workflow-border hover:bg-workflow-surface-hover cursor-pointer transition-colors duration-200"
+        >
+          <input
+            type="checkbox"
+            checked={selectedIds.includes(skill.id)}
+            onChange={() => toggleSkill(skill.id)}
+            className="rounded border-workflow-border text-primary focus:ring-primary/30"
+          />
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-mono text-workflow-text truncate">{skill.name}</div>
+            {skill.description && (
+              <div className="text-[10px] text-workflow-text-muted truncate">{skill.description}</div>
+            )}
+          </div>
+        </label>
+      ))}
+    </div>
+  );
+}
+
+// MCPToolSelector — multi-select MCP tools for Agent node
+function MCPToolSelector({
+  selectedTools,
+  onChange,
+  servers,
+  serverTools,
+  loadingTools,
+  expandedServer,
+  onExpandServer,
+}: {
+  selectedTools: string[];
+  onChange: (tools: string[]) => void;
+  servers: MCPServer[];
+  serverTools: Record<string, MCPServerTool[]>;
+  loadingTools: Record<string, boolean>;
+  expandedServer: string | null;
+  onExpandServer: (id: string | null) => void;
+}) {
+  const toggleTool = (serverId: string, toolName: string) => {
+    const key = `${serverId}::${toolName}`;
+    if (selectedTools.includes(key)) {
+      onChange(selectedTools.filter((t) => t !== key));
+    } else {
+      onChange([...selectedTools, key]);
+    }
+  };
+
+  const toggleServer = (serverId: string) => {
+    onExpandServer(expandedServer === serverId ? null : serverId);
+  };
+
+  if (servers.length === 0) {
+    return (
+      <div className="text-xs text-workflow-text-muted font-mono py-2">
+        No MCP servers available. Add MCP servers in the MCP Tools page first.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1.5 max-h-40 overflow-y-auto">
+      {servers.map((server) => {
+        const tools = serverTools[server.id];
+        const isLoading = loadingTools[server.id];
+        const isExpanded = expandedServer === server.id;
+        const selectedInServer = selectedTools.filter((t) => t.startsWith(`${server.id}::`)).length;
+
+        return (
+          <div key={server.id} className="border border-workflow-border rounded-lg overflow-hidden">
+            <button
+              type="button"
+              onClick={() => toggleServer(server.id)}
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-workflow-surface-hover transition-colors text-left"
+            >
+              <span className={`transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}>
+                <ChevronRight className="w-3 h-3 text-workflow-text-muted" />
+              </span>
+              <span className="text-xs font-mono text-workflow-text truncate flex-1">{server.name}</span>
+              {selectedInServer > 0 && (
+                <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full shrink-0">
+                  {selectedInServer}
+                </span>
+              )}
+            </button>
+
+            {isExpanded && (
+              <div className="border-t border-workflow-border bg-workflow-bg/30">
+                {isLoading ? (
+                  <div className="flex items-center gap-2 text-xs text-workflow-text-muted py-2 px-3">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Loading tools...
+                  </div>
+                ) : !tools || tools.length === 0 ? (
+                  <div className="text-xs text-workflow-text-muted py-2 px-3">No tools available</div>
+                ) : (
+                  <div className="py-1">
+                    {tools.map((tool) => {
+                      const key = `${server.id}::${tool.name}`;
+                      return (
+                        <label
+                          key={tool.name}
+                          className="flex items-start gap-2 px-3 py-1.5 hover:bg-workflow-surface-hover cursor-pointer transition-colors ml-4"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedTools.includes(key)}
+                            onChange={() => toggleTool(server.id, tool.name)}
+                            className="mt-0.5 rounded border-workflow-border text-primary focus:ring-primary/30"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-mono text-workflow-text">{tool.name}</div>
+                            {tool.description && (
+                              <div className="text-[10px] text-workflow-text-muted line-clamp-2">{tool.description}</div>
+                            )}
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

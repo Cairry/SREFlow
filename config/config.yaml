@@ -1,5 +1,5 @@
 Server:
-  port: "9001"
+  port: "9002"
   # release / debug / test
   mode: "release"
 

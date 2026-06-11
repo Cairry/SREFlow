@@ -28,6 +28,7 @@ interface NodeResultDisplay {
   nodeId: string;
   nodeType: string;
   output: string | null;
+  outputs?: Record<string, unknown>;
   error?: string;
   timestamp: Date;
   status: 'idle' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'skipped';
@@ -35,6 +36,7 @@ interface NodeResultDisplay {
 
 interface OutputPanelProps {
   execution: WorkflowExecution | null;
+  nodeResults?: { nodeId: string; output: string | null; outputs?: Record<string, unknown>; error?: string }[];
   isExecuting: boolean;
   onClose: () => void;
   nodes: WorkflowNode[];
@@ -43,6 +45,7 @@ interface OutputPanelProps {
 
 export function OutputPanel({
   execution,
+  nodeResults,
   isExecuting,
   onClose,
   nodes,
@@ -118,11 +121,11 @@ export function OutputPanel({
   };
 
   // Build a map from nodeId -> execution result for quick lookup
-  const resultMap = new Map<string, { output: string | null; error?: string }>(
-    (execution?.results || []).map((r) => [r.nodeId, { output: r.output, error: r.error }])
+  const resultMap = new Map<string, { output: string | null; outputs?: Record<string, unknown>; error?: string }>(
+    (nodeResults || execution?.results || []).map((r) => [r.nodeId, { output: r.output, outputs: r.outputs, error: r.error }])
   );
 
-  const hasResults = execution && execution.results && execution.results.length > 0;
+  const hasResults = (nodeResults?.length ?? 0) > 0 || (execution?.results?.length ?? 0) > 0;
 
   // Build display items from nodes + statuses
   const displayItems: NodeResultDisplay[] = nodes.map((node) => {
@@ -141,6 +144,7 @@ export function OutputPanel({
       nodeId: node.id,
       nodeType: node.type,
       output: result?.output || null,
+      outputs: result?.outputs,
       error: result?.error,
       timestamp: new Date(),
       status: effectiveStatus,
@@ -259,11 +263,24 @@ export function OutputPanel({
                             </div>
                           </div>
                           <div className="p-2 bg-workflow-node-input/30 border border-workflow-border/30 rounded font-mono text-xs text-workflow-text break-all max-h-40 overflow-y-auto">
-                            {item.output
-                              ? formatOutput(item.output, 500)
-                              : hasResults
-                              ? "No output"
-                              : "Waiting for output..."}
+                            {item.outputs && Object.keys(item.outputs).length > 0 ? (
+                              <div className="space-y-1">
+                                {Object.entries(item.outputs).map(([key, value]) => (
+                                  <div key={key} className="border-b border-workflow-border/30 pb-1 last:border-b-0">
+                                    <div className="text-xs font-semibold text-workflow-text-muted mb-1">{key}:</div>
+                                    <div className="text-xs text-workflow-text whitespace-pre-wrap">
+                                      {typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : item.output ? (
+                              formatOutput(item.output, 500)
+                            ) : hasResults ? (
+                              <div className="text-xs text-workflow-text-muted italic">No output</div>
+                            ) : (
+                              <div className="text-xs text-workflow-text-muted italic">Waiting for output...</div>
+                            )}
                           </div>
                         </div>
                       )}

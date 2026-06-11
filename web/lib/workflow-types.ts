@@ -110,6 +110,14 @@ export interface MCPNodeData extends BaseNodeData {
   arguments: Record<string, string>;
 }
 
+export interface AgentNodeData extends BaseNodeData {
+  model: string;
+  prompt?: string;
+  maxIterations?: number;
+  skillIds?: string[];
+  selectedTools?: string[]; // "serverId::toolName" format
+}
+
 export interface HTTPNodeData extends BaseNodeData {
   url: string;
   method: "GET" | "POST" | "PUT" | "PATCH";
@@ -134,7 +142,8 @@ export type WorkflowNodeData =
   | StartNodeData
   | GoScriptNodeData
   | HTTPNodeData
-  | MCPNodeData;
+  | MCPNodeData
+  | AgentNodeData;
 
 // Node types enum
 export type WorkflowNodeType =
@@ -152,7 +161,8 @@ export type WorkflowNodeType =
   | "Start"
   | "GoScript"
   | "HTTP"
-  | "MCP";
+  | "MCP"
+  | "Agent";
 
 // Workflow Node with typed data
 export type WorkflowNode = Node<WorkflowNodeData, WorkflowNodeType>;
@@ -173,6 +183,7 @@ export interface ExecutionResult {
   nodeId: string;
   nodeType: WorkflowNodeType;
   output: string | null;
+  outputs?: Record<string, unknown>; // raw outputs map from backend
   error?: string;
   timestamp: Date;
 }

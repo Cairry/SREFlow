@@ -47,6 +47,7 @@ func NewDBClient(dbcfg config.Database) *gorm.DB {
 		&models.Workspace{},
 		&models.WorkflowVersion{},
 		&models.MCPServer{},
+		&models.Skill{},
 	)
 	if err != nil {
 		logc.Error(context.Background(), err.Error())

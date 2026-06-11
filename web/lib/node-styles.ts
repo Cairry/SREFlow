@@ -91,6 +91,12 @@ export const NODE_COLORS: Record<WorkflowNodeType, { bg: string; border: string;
     accent: "text-purple-600 dark:text-purple-400",
     handle: "bg-purple-500 border-purple-600",
   },
+  Agent: {
+    bg: "bg-workflow-node-bg",
+    border: "border-blue-500/50 dark:border-blue-500/50",
+    accent: "text-blue-600 dark:text-blue-400",
+    handle: "bg-blue-500 border-blue-600",
+  },
 };
 
 export const NODE_ICONS: Record<WorkflowNodeType, string> = {
@@ -109,4 +115,5 @@ export const NODE_ICONS: Record<WorkflowNodeType, string> = {
   HTTP: "globe",
   Kubernetes: "container",
   MCP: "puzzle",
+  Agent: "bot",
 };

@@ -16,6 +16,7 @@ var (
 	Workspace   *WorkspaceService
 	Integration *IntegrationService
 	MCP         *MCPService
+	Skill       *SkillService
 )
 
 func Init(ctx *ctx.Context) {
@@ -29,7 +30,7 @@ func Init(ctx *ctx.Context) {
 		MaxRetries:         3,
 		RetryDelay:         5 * time.Second,
 	}
-	Workflow = NewNewWorkflowService(workflowConfig, ctx.Database.Workflow(), repos.NewWorkflowExecutionRepo(ctx.Database.MySQL()), ctx.Database.Integration(), repos.NewWorkflowVersionRepo(ctx.Database.MySQL()), ctx.Database.MCPServer())
+	Workflow = NewNewWorkflowService(workflowConfig, ctx.Database.Workflow(), repos.NewWorkflowExecutionRepo(ctx.Database.MySQL()), ctx.Database.Integration(), repos.NewWorkflowVersionRepo(ctx.Database.MySQL()), ctx.Database.MCPServer(), ctx.Database.Skill())
 	Workspace = NewWorkspaceService(ctx.Database.Workspace(), ctx.Database.Workflow())
 	Integration = NewIntegrationService(ctx.Database.Integration(), ctx.Database.Workflow())
 	Workspace.SetIntegrationService(Integration)
@@ -43,6 +44,9 @@ func Init(ctx *ctx.Context) {
 	}
 	MCP = &MCPService{}
 	MCP.Init(ctx.Database.MCPServer())
+
+	Skill = &SkillService{}
+	Skill.Init(ctx.Database.Skill())
 
 	logc.Info(context.Background(), "服务逻辑层初始化完成!")
 }

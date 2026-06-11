@@ -21,17 +21,18 @@ import {
   Route,
   Wrench,
   Loader2,
+  Bot,
 } from "lucide-react";
 import { MenuDialog } from "./ui/dialog";
 import { mcpApi, MCPServer, MCPServerTool } from "@/lib/api/mcp";
 
-type NodeCategory = {
+export type NodeCategory = {
   id: string;
   label: string;
   icon: React.ReactNode;
 };
 
-const CATEGORIES: NodeCategory[] = [
+export const CATEGORIES: NodeCategory[] = [
   { id: "integration", label: "Integration", icon: <Database className="w-3 h-3" /> },
   { id: "action", label: "Action", icon: <Zap className="w-3 h-3" /> },
   { id: "ai", label: "AI", icon: <Sparkles className="w-3 h-3" /> },
@@ -39,7 +40,7 @@ const CATEGORIES: NodeCategory[] = [
   { id: "output", label: "Output", icon: <FileOutput className="w-3 h-3" /> },
 ];
 
-type NodeDef = {
+export type NodeDef = {
   type: WorkflowNodeType;
   label: string;
   description: string;
@@ -47,7 +48,7 @@ type NodeDef = {
   category: string;
 };
 
-const NODE_DEFINITIONS: NodeDef[] = [
+export const NODE_DEFINITIONS: NodeDef[] = [
   // Integration
   { type: "Prometheus", label: "Prometheus", description: "Query metrics with PromQL", icon: <Activity className="w-4 h-4" />, category: "integration" },
   { type: "Jaeger", label: "Jaeger", description: "Search traces with tags", icon: <Search className="w-4 h-4" />, category: "integration" },
@@ -61,6 +62,7 @@ const NODE_DEFINITIONS: NodeDef[] = [
   { type: "HTTP", label: "HTTP", description: "Send HTTP requests to external endpoints", icon: <Globe className="w-4 h-4" />, category: "action" },
   // AI
   { type: "LLM", label: "LLM", description: "Call LLM models", icon: <Sparkles className="w-4 h-4" />, category: "ai" },
+  { type: "Agent", label: "Agent", description: "ReAct agent with tools and skills", icon: <Bot className="w-4 h-4" />, category: "ai" },
   // Logic
   { type: "Condition", label: "Condition", description: "Branch logic flow", icon: <GitBranch className="w-4 h-4" />, category: "logic" },
   { type: "SmartRouter", label: "SmartRouter", description: "AI-powered smart routing", icon: <Route className="w-4 h-4" />, category: "logic" },
@@ -72,15 +74,15 @@ interface AddNodeDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onAddNode: (nodeType: WorkflowNodeType, mcpData?: { serverId: string; serverName: string; toolName: string; description: string }) => void;
+  position?: { x: number; y: number };
 }
 
-export function AddNodeDialog({ isOpen, onClose, onAddNode }: AddNodeDialogProps) {
+export function AddNodeDialog({ isOpen, onClose, onAddNode, position }: AddNodeDialogProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<"nodes" | "mcp">("nodes");
   const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
   const [mcpTools, setMcpTools] = useState<Record<string, MCPServerTool[]>>({});
   const [loadingServers, setLoadingServers] = useState(false);
-  const [loadingTools, setLoadingTools] = useState<Record<string, boolean>>({});
   const [expandedServer, setExpandedServer] = useState<string | null>(null);
 
   useEffect(() => {
@@ -140,7 +142,8 @@ export function AddNodeDialog({ isOpen, onClose, onAddNode }: AddNodeDialogProps
     <MenuDialog
       isOpen={isOpen}
       onClose={onClose}
-      className="absolute top-full left-2 mt-2 w-[320px] h-[680px]"
+      className="w-[320px] flex flex-col"
+      position={position}
     >
       <div className="flex items-center justify-between px-4 py-2 border-b border-workflow-border">
         <span className="text-[10px] font-mono uppercase tracking-wider text-workflow-text-muted">
@@ -182,7 +185,7 @@ export function AddNodeDialog({ isOpen, onClose, onAddNode }: AddNodeDialogProps
         </button>
       </div>
 
-      <div className="py-1 max-h-[600px] overflow-y-auto">
+      <div className="flex-1 py-1 overflow-y-auto">
         {activeTab === "nodes" ? (
           // Nodes tab - existing content
           CATEGORIES.map((cat) => {

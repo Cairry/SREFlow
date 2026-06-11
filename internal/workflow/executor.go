@@ -665,6 +665,7 @@ func (e *WorkflowExecutor) prepareNodeContext(ctx *ExecutionContext, nodeID stri
 		Input:       resolvedInput,
 		Variables:   ctx.Execution.Variables,
 		HandleEdges: handleEdges,
+		WorkspaceID: ctx.WorkspaceID,
 	}
 }
 
@@ -886,6 +887,8 @@ func (e *WorkflowExecutor) nodeTypeToIntegrationType(nodeType string) models.Int
 	case "ClickHouse":
 		return models.IntegrationTypeClickhouse
 	case "SmartRouter":
+		return models.IntegrationTypeLLM
+	case "Agent":
 		return models.IntegrationTypeLLM
 	case "SSH":
 		return models.IntegrationTypeSSHAuth
