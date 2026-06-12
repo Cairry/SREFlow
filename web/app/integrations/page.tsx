@@ -259,7 +259,7 @@ export default function IntegrationsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-workflow-bg p-6">
+    <div className="min-h-screen p-6 max-h-[60vh] overflow-y-auto">
       <div className="max-w-7xl mx-auto">
         {/* Header with Search */}
         <div className="mb-8 flex justify-between items-center gap-4">

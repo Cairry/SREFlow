@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -283,7 +285,7 @@ export default function WorkflowsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-6">
+    <div className="min-h-screen p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header with Search and Create */}
         <div className="mb-8 flex justify-between items-center gap-4">
@@ -308,31 +310,33 @@ export default function WorkflowsPage() {
           )}
 
           <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-            <DialogContent>
+            <DialogContent className="sm:max-w-[700px] bg-workflow-surface border-workflow-border">
               <DialogHeader>
-                <DialogTitle>Create New Workflow</DialogTitle>
-                <DialogDescription>
+                <DialogTitle className="text-workflow-text">
+                  Create New Workflow
+                </DialogTitle>
+                <DialogDescription className="text-workflow-text-muted">
                   Create a new workflow in your current workspace
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div>
-                  <label className="block text-sm font-mono text-workflow-text-muted mb-1">Name</label>
+              <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
+                <div className="space-y-2">
+                  <Label className="text-workflow-text">Name *</Label>
                   <Input
                     value={newTemplate.name}
                     onChange={(e) => setNewTemplate({ ...newTemplate, name: e.target.value })}
                     placeholder="Workflow name"
-                    className="bg-workflow-node-input border-workflow-border"
+                    className="bg-workflow-bg border-workflow-border text-workflow-text"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-mono text-workflow-text-muted mb-1">Description</label>
-                  <textarea
+                <div className="space-y-2">
+                 <Label className="text-workflow-text">Description *</Label>
+                  <Textarea
                     value={newTemplate.description}
                     onChange={(e) => setNewTemplate({ ...newTemplate, description: e.target.value })}
-                    placeholder="Workflow description"
-                    className="w-full min-h-[80px] px-3 py-2 text-sm bg-workflow-node-input border border-workflow-border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                    rows={3}
+                    placeholder="Enter the workflow's description. This will be displayed in the workflow list..."
+                    className="bg-workflow-bg border-workflow-border text-workflow-text resize-none font-mono"
+                    rows={12}
                   />
                 </div>
               </div>

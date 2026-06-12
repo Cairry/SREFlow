@@ -247,7 +247,7 @@ export default function SkillsPage() {
   );
 
   return (
-    <div className="min-h-screen bg-workflow-bg p-6">
+    <div className="min-h-screen p-6">
       <div className="max-w-7xl mx-auto">
         {/* Create Dialog */}
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>

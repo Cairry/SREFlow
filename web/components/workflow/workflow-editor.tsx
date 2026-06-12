@@ -901,7 +901,7 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
   };
 
   return (
-    <div className="h-[calc(100vh-64px)] flex bg-workflow-bg">
+    <div className="h-screen flex bg-workflow-bg">
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col min-h-0">
           <WorkflowToolbar

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
-import { Workflow, Zap, Sun, Moon, Monitor, Plus, LayoutGrid, Trash2, Edit2, X, Database, ArrowLeft, Puzzle, HelpCircle, BookOpen } from "lucide-react";
+import { Workflow, Zap, Sun, Moon, Monitor, Plus, LayoutGrid, Trash2, Edit2, X, Database, Puzzle, HelpCircle, BookOpen } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useState, useEffect } from "react";
 import {
@@ -180,24 +180,15 @@ export function Navigation() {
   const currentWorkspace = workspaces.find(w => w.id === currentWorkspaceId);
   const isWorkflowEditor = pathname.startsWith("/workflows/") && pathname !== "/workflows";
 
+  // 在 workflow 编辑页隐藏全局导航栏
+  if (isWorkflowEditor) return null;
+
   return (
     <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center space-x-8">
-            {isWorkflowEditor ? (
-              // Back button for workflow editor
-              <Button
-                variant="ghost"
-                asChild
-                className="flex items-center space-x-2"
-              >
-                <Link href="/workflows" className="flex items-center space-x-2">
-                  <ArrowLeft className="h-4 w-4" />
-                  <span>Back to Workflows</span>
-                </Link>
-              </Button>
-            ) : (
+            {(
               // Normal navigation
               <>
                 <Link href="/" className="flex items-center space-x-2">
@@ -293,9 +284,9 @@ export function Navigation() {
               Create a workspace to organize your workflows and data sources.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Workspace Name</label>
+          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
+            <div className="space-y-2">
+              <label className="block text-sm font-medium mb-1">Workspace Name *</label>
               <Input
                 value={newWorkspaceName}
                 onChange={(e) => setNewWorkspaceName(e.target.value)}
