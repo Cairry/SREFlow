@@ -22,7 +22,7 @@ function StartNodeComponent({ data, selected, ...props }: NodeProps) {
           Start Node
         </div>
         <div className="text-xs text-workflow-text-subtle font-mono truncate">
-          {nodeData.text || "Click to edit"}
+          {nodeData.text.length > 30 ? (nodeData.text || "Click to edit").slice(0, 30) + "..." : nodeData.text}
         </div>
       </div>
     </BaseNode>

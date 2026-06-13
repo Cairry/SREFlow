@@ -192,7 +192,7 @@ export interface ExecutionResult {
 export interface WorkflowExecution {
   id: string;
   workflowId: string;
-  status: "pending" | "running" | "completed" | "failed";
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
   results: ExecutionResult[];
   finalOutput?: string;
   startedAt: Date;

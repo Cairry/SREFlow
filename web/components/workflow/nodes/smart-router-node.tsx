@@ -46,7 +46,7 @@ function SmartRouterNodeComponent({ data, selected, ...props }: NodeProps) {
       {...(props as any)}
     >
       <div className="space-y-1.5">
-        <div className="text-xs text-amber-600 dark:text-amber-400 font-mono truncate">
+        <div className="text-xs text-workflow-text-muted font-mono truncate">
           {nodeData.model || "AI Router"}
         </div>
         {branchCount > 0 ? (
@@ -54,7 +54,7 @@ function SmartRouterNodeComponent({ data, selected, ...props }: NodeProps) {
             {branchHandles.map((b) => (
               <span
                 key={b.id}
-                className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-workflow-surface/60 text-workflow-text-subtle border border-workflow-border-subtle"
               >
                 {b.label}
               </span>

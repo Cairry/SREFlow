@@ -190,7 +190,7 @@ export function BaseNode({
             className="!w-1 !h-4 !bg-gray-500 !border !border-gray-300/30 rounded-sm"
           />
           <div className="absolute right-[-40px] top-[35%] text-xs text-gray-500 dark:text-gray-400 font-mono">true</div>
-          <div className="absolute right-[-40px] top-[65%] text-xs text-gray-500 dark:text-gray-400 font-mono">false</div>
+          <div className="absolute right-[-45px] top-[65%] text-xs text-gray-500 dark:text-gray-400 font-mono">false</div>
         </>
       )}
 
@@ -205,7 +205,7 @@ export function BaseNode({
                 position={Position.Right}
                 id={branch.id}
                 style={{ top: `${topPercent}%`, zIndex: 10 + idx }}
-                className="!w-2 !h-5 !bg-amber-500 !border !border-amber-300/30 rounded-sm"
+                className="!w-1 !h-4 !bg-gray-500 !border !border-gray-300/30 rounded-sm"
               />
             );
           })}
@@ -214,8 +214,8 @@ export function BaseNode({
             return (
               <div
                 key={`label-${branch.id}`}
-                className="absolute right-[-8px] text-[10px] text-amber-600 dark:text-amber-400 font-mono whitespace-nowrap bg-workflow-node-bg px-1 rounded pointer-events-none select-none"
-                style={{ top: `${topPercent - 1}%`, transform: "translateX(100%)", zIndex: 5 }}
+                className="absolute right-[-60px] top-[-8px] text-xs text-gray-500 dark:text-gray-400 font-mono whitespace-nowrap"
+                style={{ top: `${topPercent - 1}%`, zIndex: 5 }}
               >
                 {branch.label}
               </div>
