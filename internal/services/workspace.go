@@ -3,13 +3,14 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"SREFlow/internal/models"
 	"SREFlow/internal/repos"
 	"SREFlow/internal/types"
 	"SREFlow/pkg/tools"
+
+	"github.com/zeromicro/go-zero/core/logc"
 )
 
 // WorkspaceService 工作空间服务
@@ -62,7 +63,7 @@ func (s *WorkspaceService) Create(ctx context.Context, req interface{}) (data in
 		return nil, fmt.Errorf("failed to create workspace: %w", err)
 	}
 
-	log.Printf("[WorkspaceService] Workspace created: %s (%s)", workspace.Name, workspace.ID)
+	logc.Infof(ctx, "[WorkspaceService] Workspace created: %s (%s)", workspace.Name, workspace.ID)
 
 	// 为新工作空间创建所有默认集成
 	if s.integrationService != nil {
@@ -90,7 +91,7 @@ func (s *WorkspaceService) Update(ctx context.Context, req interface{}) (data in
 		return nil, fmt.Errorf("failed to update workspace: %w", err)
 	}
 
-	log.Printf("[WorkspaceService] Workspace updated: %s (%s)", workspace.Name, workspace.ID)
+	logc.Infof(ctx, "[WorkspaceService] Workspace updated: %s (%s)", workspace.Name, workspace.ID)
 	return workspace, nil
 }
 
@@ -110,6 +111,6 @@ func (s *WorkspaceService) Delete(ctx context.Context, id string) (data interfac
 	if err := s.workspaceRepo.Delete(id); err != nil {
 		return nil, fmt.Errorf("failed to delete workspace: %w", err)
 	}
-	log.Printf("[WorkspaceService] Workspace deleted: %s", id)
+	logc.Infof(ctx, "[WorkspaceService] Workspace deleted: %s", id)
 	return map[string]interface{}{"id": id}, nil
 }

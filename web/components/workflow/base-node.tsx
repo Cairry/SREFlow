@@ -127,7 +127,7 @@ export function BaseNode({
   return (
     <div
       className={cn(
-        "min-w-[280px] rounded-lg border-2 shadow-lg transition-all duration-300 group",
+        "relative min-w-[280px] rounded-lg border-2 shadow-lg transition-all duration-300 group",
         colors.bg,
         statusBorderColor,
         statusBgColor,
@@ -199,21 +199,26 @@ export function BaseNode({
           {branchHandles.map((branch, idx) => {
             const topPercent = Math.round(30 + (idx / Math.max(branchHandles.length - 1, 1)) * 50);
             return (
-              <React.Fragment key={branch.id}>
-                <Handle
-                  type="source"
-                  position={Position.Right}
-                  id={branch.id}
-                  style={{ top: `${topPercent}%` }}
-                  className="!w-1 !h-4 !bg-amber-500 !border !border-amber-300/30 rounded-sm"
-                />
-                <div
-                  className="absolute right-[-8px] text-[10px] text-amber-600 dark:text-amber-400 font-mono whitespace-nowrap bg-workflow-node-bg px-1 rounded"
-                  style={{ top: `${topPercent - 1}%`, transform: "translateX(100%)" }}
-                >
-                  {branch.label}
-                </div>
-              </React.Fragment>
+              <Handle
+                key={branch.id}
+                type="source"
+                position={Position.Right}
+                id={branch.id}
+                style={{ top: `${topPercent}%`, zIndex: 10 + idx }}
+                className="!w-2 !h-5 !bg-amber-500 !border !border-amber-300/30 rounded-sm"
+              />
+            );
+          })}
+          {branchHandles.map((branch, idx) => {
+            const topPercent = Math.round(30 + (idx / Math.max(branchHandles.length - 1, 1)) * 50);
+            return (
+              <div
+                key={`label-${branch.id}`}
+                className="absolute right-[-8px] text-[10px] text-amber-600 dark:text-amber-400 font-mono whitespace-nowrap bg-workflow-node-bg px-1 rounded pointer-events-none select-none"
+                style={{ top: `${topPercent - 1}%`, transform: "translateX(100%)", zIndex: 5 }}
+              >
+                {branch.label}
+              </div>
             );
           })}
         </>

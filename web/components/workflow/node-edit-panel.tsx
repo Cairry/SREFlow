@@ -19,37 +19,40 @@ import { mcpApi, type MCPServer, type MCPServerTool } from "@/lib/api/mcp";
 import { integrationApi } from "@/lib/api/integration";
 import { skillApi, type Skill } from "@/lib/api/skill";
 
-// Node output variables definition
+// Node output variables definition (aligned with backend node return structures)
 export const NODE_OUTPUT_VARIABLES: Record<string, { name: string; type: string; description: string }[]> = {
   LLM: [
     { name: "output", type: "string", description: "LLM generated text response" },
     { name: "latency", type: "float", description: "API response time in seconds" },
+    { name: "usage.maxTokens", type: "int", description: "Max tokens configured for request" },
     { name: "usage.inputTokens", type: "int", description: "Tokens used in prompt" },
     { name: "usage.outputTokens", type: "int", description: "Tokens in completion" },
     { name: "usage.totalTokens", type: "int", description: "Total tokens used" },
+    { name: "parsed", type: "object", description: "Parsed JSON from AI response (when response is valid JSON)" },
   ],
   Prometheus: [
-    { name: "series", type: "array", description: "Time series data" },
-    { name: "raw_data", type: "object", description: "Raw API response" },
+    { name: "promQL", type: "string", description: "The PromQL query that was executed" },
+    { name: "series", type: "array", description: "Time series data returned from query" },
   ],
   Jaeger: [
-    { name: "traces", type: "array", description: "Array of trace objects" },
-    { name: "traceCount", type: "int", description: "Number of traces" },
-    { name: "raw_response", type: "object", description: "Raw API response" },
+    { name: "traces", type: "array", description: "Array of processed trace objects" },
+    { name: "trace_count", type: "int", description: "Number of traces returned" },
+    { name: "raw_response", type: "object", description: "Raw Jaeger API response" },
   ],
   Elasticsearch: [
-    { name: "data", type: "object", description: "Elasticsearch response data" },
+    { name: "data", type: "object", description: "Elasticsearch query response data" },
   ],
   Loki: [
-    { name: "result_type", type: "string", description: "Result type: streams/logs/etc" },
-    { name: "series", type: "array", description: "Log series" },
-    { name: "data", type: "object", description: "Raw API response" },
+    { name: "data.result_type", type: "string", description: "Result type: streams/logs/vector" },
+    { name: "data.series", type: "array", description: "Processed log series data" },
+    { name: "data.data", type: "object", description: "Raw Loki API response data" },
+    { name: "query", type: "string", description: "The LogQL query that was executed" },
   ],
   ClickHouse: [
-    { name: "data", type: "array/object", description: "Query result data" },
+    { name: "data", type: "array/object", description: "ClickHouse SQL query result data" },
   ],
   SSH: [
-    { name: "output", type: "string", description: "Command output" },
+    { name: "output", type: "string", description: "SSH command execution output" },
   ],
   Kubernetes: [
     { name: "pods", type: "array", description: "Pod list (when resourceType=status, pod=all)" },
@@ -59,11 +62,7 @@ export const NODE_OUTPUT_VARIABLES: Record<string, { name: string; type: string;
     { name: "namespace", type: "string", description: "Namespace queried" },
   ],
   Condition: [
-    { name: "result", type: "bool", description: "Condition check result (true/false)" },
-    { name: "input", type: "string", description: "Original input value" },
-    { name: "condition", type: "string", description: "Variable used in check" },
-    { name: "operator", type: "string", description: "Operator used" },
-    { name: "value", type: "string", description: "Value compared against" },
+    { name: "branch", type: "string", description: "Condition result: 'true' or 'false', used for routing" },
   ],
   SmartRouter: [
     { name: "output", type: "string", description: "Selected branch ID" },
@@ -71,6 +70,9 @@ export const NODE_OUTPUT_VARIABLES: Record<string, { name: string; type: string;
     { name: "confidence", type: "float", description: "Confidence score (0.0-1.0)" },
     { name: "reasoning", type: "string", description: "LLM reasoning for the routing decision" },
     { name: "latency", type: "float", description: "LLM API response time in seconds" },
+    { name: "usage.inputTokens", type: "int", description: "Tokens used in prompt" },
+    { name: "usage.outputTokens", type: "int", description: "Tokens in completion" },
+    { name: "usage.totalTokens", type: "int", description: "Total tokens used" },
   ],
   Start: [
     { name: "text", type: "string", description: "完整文本内容（当输入为纯字符串时使用 start.text 引用）" },
@@ -78,25 +80,27 @@ export const NODE_OUTPUT_VARIABLES: Record<string, { name: string; type: string;
   ],
   GoScript: [
     { name: "output", type: "object", description: "User-defined output variable from script" },
-    { name: "error", type: "string", description: "Error message (if execution failed)" },
+    { name: "error", type: "string", description: "Error message (when execution fails)" },
+    { name: "error_type", type: "string", description: "Error type classification (when execution fails)" },
     { name: "success", type: "bool", description: "Whether script executed successfully" },
   ],
   HTTP: [
+    { name: "url", type: "string", description: "Target URL that was requested" },
+    { name: "method", type: "string", description: "HTTP method used (GET/POST/etc.)" },
+    { name: "requestBody", type: "string", description: "The resolved request body sent" },
     { name: "statusCode", type: "int", description: "HTTP response status code" },
     { name: "responseBody", type: "string", description: "Response body from the endpoint" },
-    { name: "responseHeaders", type: "object", description: "Response headers" },
-    { name: "requestBody", type: "string", description: "The resolved request body sent" },
-    { name: "url", type: "string", description: "Target URL" },
-    { name: "method", type: "string", description: "HTTP method used" },
+    { name: "responseHeaders", type: "object", description: "HTTP response headers" },
   ],
   MCP: [
-    { name: "output", type: "string", description: "MCP tool execution result" },
-    { name: "error", type: "string", description: "Error message if execution failed" },
+    { name: "isError", type: "bool", description: "Whether the MCP tool returned an error" },
+    { name: "output", type: "array", description: "MCP tool execution result content list" },
   ],
   Agent: [
     { name: "output", type: "string", description: "Agent final response text" },
-    { name: "iterations", type: "int", description: "Number of ReAct iterations" },
-    { name: "toolCalls", type: "array", description: "Array of tool call records" },
+    { name: "iterations", type: "int", description: "Number of ReAct iterations (tool calls + 1)" },
+    { name: "latency", type: "float", description: "Total execution time in seconds" },
+    { name: "toolCalls", type: "array", description: "Array of tool call records (when tools were used)" },
   ],
 };
 
@@ -129,6 +133,8 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
   const goscriptRef = useRef<HTMLTextAreaElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const goscriptEditorRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const goscriptInlineEditorRef = useRef<any>(null);
   const promqlRef = useRef<HTMLTextAreaElement>(null);
   const esQueryRef = useRef<HTMLTextAreaElement>(null);
   const lokiQueryRef = useRef<HTMLTextAreaElement>(null);
@@ -141,6 +147,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
   const jaegerServiceRef = useRef<HTMLInputElement>(null);
   const jaegerTagsRef = useRef<HTMLInputElement>(null);
   const esIndexRef = useRef<HTMLInputElement>(null);
+  const smartRouterInputRef = useRef<HTMLTextAreaElement>(null);
 
   useVariablePickerShortcuts(promptRef, () => setActivePicker(activePicker === "prompt" ? null : "prompt"));
   useVariablePickerShortcuts(systemPromptRef, () => setActivePicker(activePicker === "systemPrompt" ? null : "systemPrompt"));
@@ -157,6 +164,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
   useVariablePickerShortcuts(jaegerServiceRef, () => setActiveTextPicker(activeTextPicker === "jaegerService" ? null : "jaegerService"));
   useVariablePickerShortcuts(jaegerTagsRef, () => setActiveTextPicker(activeTextPicker === "jaegerTags" ? null : "jaegerTags"));
   useVariablePickerShortcuts(esIndexRef, () => setActiveTextPicker(activeTextPicker === "esIndex" ? null : "esIndex"));
+  useVariablePickerShortcuts(smartRouterInputRef, () => setActivePicker(activePicker === "smartRouterInput" ? null : "smartRouterInput"));
 
   const insertVariable = (pickerKey: string, variableRef: string) => {
     if (pickerKey === "condition") {
@@ -185,8 +193,28 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
       chQuery: chQueryRef,
       webhookBody: webhookBodyRef,
       sshCommand: sshCommandRef,
+      smartRouterInput: smartRouterInputRef,
     };
     const textareaRef = refMap[pickerKey];
+
+    // GoScript 内联 Monaco Editor：用 Monaco API 插入变量
+    if (pickerKey === "goscript" && goscriptInlineEditorRef.current) {
+      const editor = goscriptInlineEditorRef.current;
+      const selection = editor.getSelection();
+      const model = editor.getModel();
+      if (selection && model) {
+        editor.executeEdits("", [{
+          range: selection,
+          text: variableRef,
+          forceMoveMarkers: true,
+        }]);
+        editor.focus();
+      }
+      onUpdate(node!.id, { code: model.getValue() });
+      setActivePicker(null);
+      return;
+    }
+
     if (!textareaRef?.current) return;
     const textarea = textareaRef.current;
     const start = textarea.selectionStart;
@@ -197,7 +225,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
       prompt: "prompt", systemPrompt: "systemPrompt",
       goscript: "code", promql: "query", esQuery: "query",
       lokiQuery: "query", chQuery: "query", webhookBody: "webhook",
-      sshCommand: "command",
+      sshCommand: "command", smartRouterInput: "input",
     };
     const field = fieldMap[pickerKey];
     if (field === "webhook") {
@@ -887,6 +915,30 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
             <ModelSelector value={safeGetValue("model", "") as string} onChange={(v) => handleChange("model", v)} />
           </div>
           <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className={labelClass + " mb-0"}>Input</label>
+              <VariablePicker
+                nodes={nodes}
+                edges={edges}
+                currentNodeId={node.id}
+                onInsert={(ref) => insertVariable("smartRouterInput", ref)}
+                trigger={
+                  <button type="button" className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono text-workflow-text-muted border border-workflow-border rounded hover:bg-workflow-surface-hover transition-colors duration-200">
+                    <Braces className="h-3 w-3" />
+                    Vars
+                  </button>
+                }
+              />
+            </div>
+            <textarea
+              ref={smartRouterInputRef}
+              value={safeGetValue('input', '')}
+              onChange={(e) => handleChange("input", e.target.value)}
+              placeholder="Optional: specify input data for LLM routing, e.g. {{prometheus_1.series}}. Leave empty to use all upstream outputs."
+              className={`${textareaClass} h-20`}
+            />
+          </div>
+          <div>
             <label className={labelClass}>Routing Branches</label>
             <SmartRouterBranchEditor
               branches={safeGetValue("branches", "[]")}
@@ -1080,6 +1132,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
                 defaultLanguage="go"
                 value={safeGetValue("code", "")}
                 onChange={(value) => handleChange("code", value || "")}
+                onMount={(editor) => { goscriptInlineEditorRef.current = editor; }}
                 theme="vs-dark"
                 options={{
                   fontSize: 13,

@@ -2,19 +2,23 @@ package workflow
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"reflect"
 	"regexp"
 	"strings"
 	"text/template"
 
 	"SREFlow/internal/models"
+
+	"github.com/zeromicro/go-zero/core/logc"
 )
 
 // VariableResolver 变量解析器
 type VariableResolver struct {
+	// 请求上下文，用于日志携带 traceId
+	ctx context.Context
 	// 存储所有节点的执行结果
 	nodeResults map[string]*models.NodeResult
 	// 存储全局变量
@@ -24,8 +28,9 @@ type VariableResolver struct {
 }
 
 // NewVariableResolver 创建新的变量解析器
-func NewVariableResolver(nodeResults map[string]*models.NodeResult, variables map[string]any) *VariableResolver {
+func NewVariableResolver(ctx context.Context, nodeResults map[string]*models.NodeResult, variables map[string]any) *VariableResolver {
 	return &VariableResolver{
+		ctx:         ctx,
 		nodeResults: nodeResults,
 		variables:   variables,
 		funcMap:     createTemplateFuncMap(nodeResults, variables),
@@ -111,13 +116,17 @@ func (vr *VariableResolver) ResolveVariables(input string) (string, error) {
 }
 
 // ResolveVariablesInMap 解析map中的所有变量引用
+// 单个key解析失败时保留原始值，不影响其他key的解析
 func (vr *VariableResolver) ResolveVariablesInMap(input map[string]any) (map[string]any, error) {
 	result := make(map[string]any)
 
 	for key, value := range input {
 		resolvedValue, err := vr.resolveValue(value)
 		if err != nil {
-			return nil, fmt.Errorf("failed to resolve key %s: %w", key, err)
+			// 解析失败：保留原始值，记录日志，继续处理其他字段
+			logc.Infof(vr.ctx, "[VariableResolver] Keeping original value for key '%s': %v", key, err)
+			result[key] = value
+			continue
 		}
 		result[key] = resolvedValue
 	}
@@ -133,12 +142,13 @@ func (vr *VariableResolver) resolveValue(value any) (any, error) {
 	case map[string]any:
 		return vr.ResolveVariablesInMap(v)
 	case []any:
-		// 处理数组
+		// 处理数组：单个元素解析失败时保留原始元素，不影响其他元素
 		result := make([]any, len(v))
 		for i, item := range v {
 			resolvedItem, err := vr.resolveValue(item)
 			if err != nil {
-				return nil, fmt.Errorf("failed to resolve array item at index %d: %w", i, err)
+				result[i] = item
+				continue
 			}
 			result[i] = resolvedItem
 		}
@@ -168,28 +178,52 @@ func (vr *VariableResolver) resolveLegacyVariables(input string) (string, error)
 		value, err := vr.resolveVariablePath(varPath)
 		if err != nil {
 			// 如果解析失败，返回原始字符串
-			log.Printf("[VariableResolver] Failed to resolve variable '%s': %v", varPath, err)
+			logc.Infof(vr.ctx, "[VariableResolver] Failed to resolve variable '%s': %v", varPath, err)
 			return match
 		}
 
-		// 将值转换为字符串
-		return fmt.Sprintf("%v", value)
+		return stringifyForTemplate(value)
 	}), nil
+}
+
+// stringifyForTemplate 将解析后的值转为适合嵌入模板字符串的格式
+// - string/int/float/bool：直接 fmt.Sprintf
+// - map/array：JSON 序列化，方便 GoScript 等节点 json.Unmarshal 使用
+func stringifyForTemplate(value any) string {
+	switch v := value.(type) {
+	case string:
+		return v
+	case map[string]any, []any:
+		jsonBytes, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Sprintf("%v", v)
+		}
+		return string(jsonBytes)
+	default:
+		return fmt.Sprintf("%v", v)
+	}
 }
 
 // resolveVariablePath 解析变量路径
 func (vr *VariableResolver) resolveVariablePath(path string) (any, error) {
 	parts := strings.Split(path, ".")
-	if len(parts) < 2 {
+	if len(parts) == 0 || parts[0] == "" {
 		return nil, fmt.Errorf("invalid variable path: %s", path)
 	}
 
 	switch parts[0] {
 	case "variables":
+		if len(parts) < 2 {
+			return nil, fmt.Errorf("invalid variable path: %s", path)
+		}
 		// 引用全局变量
 		return vr.resolveVariable(parts[1:])
 	default:
 		// 引用节点输出
+		// 如果没有指定字段（只有 nodeId），返回节点所有 output
+		if len(parts) == 1 {
+			return vr.resolveNodeAllOutputs(parts[0])
+		}
 		return vr.resolveNodeOutput(parts[0], parts[1:])
 	}
 }
@@ -216,6 +250,20 @@ func (vr *VariableResolver) resolveVariable(pathParts []string) (any, error) {
 	}
 
 	return value, nil
+}
+
+// resolveNodeAllOutputs 获取节点所有输出（当只指定 nodeId 没有字段时）
+func (vr *VariableResolver) resolveNodeAllOutputs(nodeId string) (any, error) {
+	result, exists := vr.nodeResults[nodeId]
+	if !exists {
+		return nil, fmt.Errorf("node result not found: %s", nodeId)
+	}
+
+	if result.Outputs == nil {
+		return nil, fmt.Errorf("node %s has no outputs", nodeId)
+	}
+
+	return result.Outputs, nil
 }
 
 // resolveNodeOutput 解析节点输出

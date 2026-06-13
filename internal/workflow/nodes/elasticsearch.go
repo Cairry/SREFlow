@@ -6,12 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"SREFlow/internal/models"
+
+	"github.com/zeromicro/go-zero/core/logc"
 )
 
 // ElasticsearchExecutor Elasticsearch查询执行器
@@ -46,7 +47,7 @@ func (e *ElasticsearchExecutor) Execute(ctx context.Context, nodeCtx *models.Nod
 		return errorResult("index is required"), nil
 	}
 
-	log.Printf("[Elasticsearch] Querying %s index: %s, type: %s", elasticsearchURL, index, queryType)
+	logc.Infof(ctx, "[Elasticsearch] Querying %s index: %s, type: %s", elasticsearchURL, index, queryType)
 
 	// 构建Elasticsearch API URL
 	var apiURL string
@@ -105,7 +106,7 @@ func (e *ElasticsearchExecutor) Execute(ctx context.Context, nodeCtx *models.Nod
 		for k, v := range headers {
 			req.Header.Set(k, v)
 		}
-		log.Printf("[Elasticsearch] Added headers from config: %v", headers)
+		logc.Infof(ctx, "[Elasticsearch] Added headers from config: %v", headers)
 	}
 
 	// 添加认证信息 - 优先使用从数据源合并的认证配置
@@ -113,13 +114,13 @@ func (e *ElasticsearchExecutor) Execute(ctx context.Context, nodeCtx *models.Nod
 	password := getStr(nodeCtx.Config, "authPassword", "")
 	if username != "" {
 		req.SetBasicAuth(username, password)
-		log.Printf("[Elasticsearch] Added Basic authentication for user: %s", username)
+		logc.Infof(ctx, "[Elasticsearch] Added Basic authentication for user: %s", username)
 	}
 
 	// 添加Bearer token认证
 	if authToken := getStr(nodeCtx.Config, "authToken", ""); authToken != "" {
 		req.Header.Set("Authorization", "Bearer "+authToken)
-		log.Printf("[Elasticsearch] Added Bearer token authentication")
+		logc.Infof(ctx, "[Elasticsearch] Added Bearer token authentication")
 	}
 
 	// 添加API Key认证
@@ -128,13 +129,13 @@ func (e *ElasticsearchExecutor) Execute(ctx context.Context, nodeCtx *models.Nod
 		authAPIKeyIn := getStr(nodeCtx.Config, "authAPIKeyIn", "header")
 		if authAPIKeyIn == "header" {
 			req.Header.Set(authAPIKeyName, authAPIKey)
-			log.Printf("[Elasticsearch] Added API Key in header: %s", authAPIKeyName)
+			logc.Infof(ctx, "[Elasticsearch] Added API Key in header: %s", authAPIKeyName)
 		} else {
 			// Add to query parameters
 			if q := req.URL.Query(); q != nil {
 				q.Add(authAPIKeyName, authAPIKey)
 				req.URL.RawQuery = q.Encode()
-				log.Printf("[Elasticsearch] Added API Key in query parameter: %s", authAPIKeyName)
+				logc.Infof(ctx, "[Elasticsearch] Added API Key in query parameter: %s", authAPIKeyName)
 			}
 		}
 	}
@@ -156,7 +157,7 @@ func (e *ElasticsearchExecutor) Execute(ctx context.Context, nodeCtx *models.Nod
 		return errorResult(fmt.Sprintf("failed to decode response: %v", err)), nil
 	}
 
-	log.Printf("[Elasticsearch] Query executed successfully for index: %s", index)
+	logc.Infof(ctx, "[Elasticsearch] Query executed successfully for index: %s", index)
 
 	return newResult(map[string]any{
 		"data": result,

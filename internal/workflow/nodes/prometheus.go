@@ -6,10 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/zeromicro/go-zero/core/logc"
 )
 
 // PrometheusNodeExecutor Prometheus节点执行器包装器
@@ -41,7 +42,7 @@ func ExecutePrometheus(ctx context.Context, nc *models.NodeContext) (*models.Nod
 		return errorResult("prometheusUrl is required - please configure a Prometheus integration or set prometheusUrl explicitly"), nil
 	}
 
-	log.Printf("[Prometheus] Querying %s with: %s", prometheusUrl, query)
+	logc.Infof(ctx, "[Prometheus] Querying %s with: %s", prometheusUrl, query)
 
 	// 验证查询不为空
 	if query == "" {
@@ -69,31 +70,31 @@ func ExecutePrometheus(ctx context.Context, nc *models.NodeContext) (*models.Nod
 		for k, v := range headers {
 			req.Header.Set(k, v)
 		}
-		log.Printf("[Prometheus] Added headers from config: %v", headers)
+		logc.Infof(ctx, "[Prometheus] Added headers from config: %v", headers)
 	}
 
 	// 添加认证信息
 	if authToken := getStr(nc.Config, "authToken", ""); authToken != "" {
 		req.Header.Set("Authorization", "Bearer "+authToken)
-		log.Printf("[Prometheus] Added Bearer token authentication")
+		logc.Infof(ctx, "[Prometheus] Added Bearer token authentication")
 	}
 	if authUsername := getStr(nc.Config, "authUsername", ""); authUsername != "" {
 		authPassword := getStr(nc.Config, "authPassword", "")
 		req.SetBasicAuth(authUsername, authPassword)
-		log.Printf("[Prometheus] Added Basic authentication for user: %s", authUsername)
+		logc.Infof(ctx, "[Prometheus] Added Basic authentication for user: %s", authUsername)
 	}
 	if authAPIKey := getStr(nc.Config, "authAPIKey", ""); authAPIKey != "" {
 		authAPIKeyName := getStr(nc.Config, "authAPIKeyName", "X-API-Key")
 		authAPIKeyIn := getStr(nc.Config, "authAPIKeyIn", "header")
 		if authAPIKeyIn == "header" {
 			req.Header.Set(authAPIKeyName, authAPIKey)
-			log.Printf("[Prometheus] Added API Key in header: %s", authAPIKeyName)
+			logc.Infof(ctx, "[Prometheus] Added API Key in header: %s", authAPIKeyName)
 		} else {
 			// Add to query parameters
 			if q := req.URL.Query(); q != nil {
 				q.Add(authAPIKeyName, authAPIKey)
 				req.URL.RawQuery = q.Encode()
-				log.Printf("[Prometheus] Added API Key in query parameter: %s", authAPIKeyName)
+				logc.Infof(ctx, "[Prometheus] Added API Key in query parameter: %s", authAPIKeyName)
 			}
 		}
 	}
@@ -139,17 +140,7 @@ func ExecutePrometheus(ctx context.Context, nc *models.NodeContext) (*models.Nod
 		return errorResult("invalid prometheus response: no result field"), nil
 	}
 
-	log.Printf("[Prometheus] Query returned %d series (type: %s)", len(series), resultType)
-
-	// 处理查询结果
-	// var processedSeries []map[string]any
-	// for _, s := range series {
-	// 	if seriesData, ok := s.(map[string]any); ok {
-	// 		processedSeries = append(processedSeries, seriesData)
-	// 	}
-	// }
-
-	// log.Printf("[Prometheus] Query executed: %s, seriesCount=%d", query, len(processedSeries))
+	logc.Infof(ctx, "[Prometheus] Query returned %d series (type: %s)", len(series), resultType)
 
 	return newResult(map[string]any{
 		"promQL": query,

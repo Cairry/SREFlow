@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"SREFlow/internal/models"
+
+	"github.com/zeromicro/go-zero/core/logc"
 )
 
 // WebhookConfig webhook配置
@@ -47,8 +48,8 @@ func (e *OutputExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContex
 	outputType := getStr(nodeCtx.Config, "outputType", "webhook")
 	customFilename := getStr(nodeCtx.Config, "customFilename", "")
 
-	log.Printf("[Output] Processing output (type: %s)", outputType)
-	log.Printf("[Output] Input variables: %d", len(nodeCtx.Input))
+	logc.Infof(ctx, "[Output] Processing output (type: %s)", outputType)
+	logc.Infof(ctx, "[Output] Input variables: %d", len(nodeCtx.Input))
 
 	// 构建输入内容
 	var inputContent string
@@ -63,7 +64,7 @@ func (e *OutputExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContex
 	var output string
 	switch outputType {
 	case "webhook":
-		webhookResult, err := executeWebhook(nodeCtx.Config, nodeCtx.Input)
+		webhookResult, err := executeWebhook(ctx, nodeCtx.Config, nodeCtx.Input)
 		if err != nil {
 			return &models.NodeResult{
 				Outputs: map[string]any{
@@ -90,7 +91,7 @@ func (e *OutputExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContex
 
 	// 如果有自定义文件名，将文件名作为元数据包含
 	if customFilename != "" {
-		log.Printf("[Output] Output file: %s", customFilename)
+		logc.Infof(ctx, "[Output] Output file: %s", customFilename)
 	}
 
 	result := map[string]any{
@@ -114,7 +115,7 @@ type WebhookResult struct {
 }
 
 // executeWebhook 执行webhook请求
-func executeWebhook(config map[string]any, input map[string]any) (*WebhookResult, error) {
+func executeWebhook(ctx context.Context, config map[string]any, input map[string]any) (*WebhookResult, error) {
 	// 获取webhook配置
 	webhookConfig := getWebhookConfig(config)
 
@@ -122,7 +123,7 @@ func executeWebhook(config map[string]any, input map[string]any) (*WebhookResult
 		return nil, fmt.Errorf("webhook URL is required")
 	}
 
-	log.Printf("[Output/Webhook] Sending %s request to %s", webhookConfig.Method, webhookConfig.URL)
+	logc.Infof(ctx, "[Output/Webhook] Sending %s request to %s", webhookConfig.Method, webhookConfig.URL)
 
 	// 替换模板变量
 	body := replaceTemplateVars(webhookConfig.Body, input)
@@ -188,7 +189,7 @@ func executeWebhook(config map[string]any, input map[string]any) (*WebhookResult
 		}
 	}
 
-	log.Printf("[Output/Webhook] Response status: %d", resp.StatusCode)
+	logc.Infof(ctx, "[Output/Webhook] Response status: %d", resp.StatusCode)
 
 	return &WebhookResult{
 		URL:             webhookConfig.URL,

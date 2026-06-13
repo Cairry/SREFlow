@@ -3,11 +3,12 @@ package middleware
 import (
 	"bytes"
 	"context"
+	"io"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/zeromicro/go-zero/core/logc"
 	"github.com/zeromicro/go-zero/core/logx"
-	"io"
-	"time"
 )
 
 // Logger returns a gin.HandlerFunc that logs requests using zap
@@ -25,7 +26,10 @@ func Logger() gin.HandlerFunc {
 		}
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
-		ctxWithReq := logx.ContextWithFields(context.Background(),
+		// 基于请求 context（已由 TraceID 中间件注入 traceId），保证请求日志携带 trace id
+		reqCtx := c.Request.Context()
+
+		ctxWithReq := logx.ContextWithFields(reqCtx,
 			logx.Field("method", c.Request.Method),
 			logx.Field("path", c.Request.URL.Path),
 		)
@@ -51,7 +55,7 @@ func Logger() gin.HandlerFunc {
 		clientIP := c.ClientIP()
 		message := c.Errors.ByType(gin.ErrorTypePrivate).String()
 
-		ctx := logx.ContextWithFields(context.Background(),
+		ctx := logx.ContextWithFields(reqCtx,
 			logx.Field("method", method),
 			logx.Field("path", path),
 			logx.Field("status", status),

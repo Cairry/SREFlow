@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"log"
-
 	"io"
 	"net/http"
 
@@ -16,6 +14,7 @@ import (
 	"SREFlow/internal/types"
 	"SREFlow/pkg/tools"
 
+	"github.com/zeromicro/go-zero/core/logc"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -64,9 +63,9 @@ func (s *IntegrationService) EnsureDefaultIntegrations(workspaceID string) {
 		}
 
 		if err := s.repo.Create(integration); err != nil {
-			log.Printf("[IntegrationService] Failed to create default integration %s for workspace %s: %v", def.Name, workspaceID, err)
+			logc.Errorf(context.Background(), "[IntegrationService] Failed to create default integration %s for workspace %s: %v", def.Name, workspaceID, err)
 		} else {
-			log.Printf("[IntegrationService] Created default integration %s for workspace %s", def.Name, workspaceID)
+			logc.Infof(context.Background(), "[IntegrationService] Created default integration %s for workspace %s", def.Name, workspaceID)
 		}
 	}
 }

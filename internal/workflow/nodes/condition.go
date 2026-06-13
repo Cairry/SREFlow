@@ -3,10 +3,11 @@ package nodes
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 
 	"SREFlow/internal/models"
+
+	"github.com/zeromicro/go-zero/core/logc"
 )
 
 // ConditionExecutor 条件判断执行器
@@ -32,31 +33,35 @@ func ExecuteCondition(ctx context.Context, nc *models.NodeContext) (*models.Node
 }
 
 func (e *ConditionExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext) (*models.NodeResult, error) {
-	conditionVar := getStr(nodeCtx.Config, "condition", "{{input}}")
+	inputStr := getStr(nodeCtx.Config, "condition", "{{input}}")
 	operator := getStr(nodeCtx.Config, "operator", "contains")
 	value := getStr(nodeCtx.Config, "value", "")
 
-	log.Printf("[Condition] Evaluating: %s %s %s", conditionVar, operator, value)
+	// 计算条件结果
+	result := evaluateCondition(inputStr, operator, value)
+	// 确定走哪个分支：true 或 false
+	branch := "false"
+	if result {
+		branch = "true"
+	}
 
-	// 获取输入值
-	inputStr := ""
-	for _, v := range nodeCtx.Input {
-		if v != nil {
-			inputStr = fmt.Sprintf("%v", v)
-			break
+	nodeResult := &models.NodeResult{
+		Outputs: map[string]any{
+			"branch": branch,
+		},
+	}
+
+	// 根据 HandleEdges 设置 Next，只路由到匹配分支的下游节点
+	if nodeCtx.HandleEdges != nil {
+		if targetNodeID, ok := nodeCtx.HandleEdges[branch]; ok {
+			nodeResult.Next = []string{targetNodeID}
+			logc.Infof(ctx, "[Condition] Routing to branch '%s' -> node %s", branch, targetNodeID)
+		} else {
+			logc.Infof(ctx, "[Condition] Branch '%s' has no connected downstream node", branch)
 		}
 	}
 
-	// 计算条件结果
-	result := evaluateCondition(inputStr, operator, value)
-
-	log.Printf("[Condition] Result: %v (input: %s)", result, inputStr)
-
-	return &models.NodeResult{
-		Outputs: map[string]any{
-			"output": result,
-		},
-	}, nil
+	return nodeResult, nil
 }
 
 func evaluateCondition(input, operator, value string) bool {

@@ -1,12 +1,15 @@
 "use client";
 
-import { memo, useMemo } from "react";
+import { memo, useMemo, useEffect } from "react";
 import type { NodeProps } from "@xyflow/react";
+import { useUpdateNodeInternals, useNodeId } from "@xyflow/react";
 import { BaseNode } from "../base-node";
 import type { SmartRouterNodeData } from "@/lib/workflow-types";
 
 function SmartRouterNodeComponent({ data, selected, ...props }: NodeProps) {
   const nodeData = data as SmartRouterNodeData;
+  const nodeId = useNodeId();
+  const updateNodeInternals = useUpdateNodeInternals();
 
   const { branchHandles, branchCount } = useMemo(() => {
     try {
@@ -24,6 +27,14 @@ function SmartRouterNodeComponent({ data, selected, ...props }: NodeProps) {
     }
   }, [nodeData.branches]);
 
+  // Force react-flow to re-measure handle bounds whenever branches change.
+  // Without this, new branch handles render in the DOM but react-flow's
+  // internal handleBounds are stale, so getHandle() can't find them and
+  // connections from those handles silently fail.
+  useEffect(() => {
+    if (nodeId) updateNodeInternals(nodeId);
+  }, [nodeId, branchCount, updateNodeInternals]);
+
   return (
     <BaseNode
       nodeType="SmartRouter"
@@ -32,7 +43,7 @@ function SmartRouterNodeComponent({ data, selected, ...props }: NodeProps) {
       runStatus={nodeData.runStatus}
       hasOutput={false}
       branchHandles={branchHandles}
-      {...props}
+      {...(props as any)}
     >
       <div className="space-y-1.5">
         <div className="text-xs text-amber-600 dark:text-amber-400 font-mono truncate">

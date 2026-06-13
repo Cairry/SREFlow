@@ -5,12 +5,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"regexp"
 	"time"
 
+	"github.com/zeromicro/go-zero/core/logc"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -64,7 +64,7 @@ func ExecuteSSH(ctx context.Context, nc *models.NodeContext) (*models.NodeResult
 		return errorResult("command is required - please enter a command to execute"), nil
 	}
 
-	log.Printf("[SSH] Connecting to %s@%s:%d", username, host, port)
+	logc.Infof(ctx, "[SSH] Connecting to %s@%s:%d", username, host, port)
 
 	// 创建SSH客户端配置
 	var authMethods []ssh.AuthMethod
@@ -84,7 +84,7 @@ func ExecuteSSH(ctx context.Context, nc *models.NodeContext) (*models.NodeResult
 					},
 				),
 			)
-			log.Printf("[SSH] Using password authentication (with keyboard-interactive fallback)")
+			logc.Infof(ctx, "[SSH] Using password authentication (with keyboard-interactive fallback)")
 		} else {
 			return errorResult("password is required for ssh_password auth method"), nil
 		}
@@ -95,7 +95,7 @@ func ExecuteSSH(ctx context.Context, nc *models.NodeContext) (*models.NodeResult
 				return errorResult(fmt.Sprintf("failed to parse private key: %v", err)), nil
 			}
 			authMethods = append(authMethods, ssh.PublicKeys(signer))
-			log.Printf("[SSH] Using private key authentication")
+			logc.Infof(ctx, "[SSH] Using private key authentication")
 		} else {
 			return errorResult("privateKey is required for ssh_key auth method"), nil
 		}
@@ -158,7 +158,7 @@ func ExecuteSSH(ctx context.Context, nc *models.NodeContext) (*models.NodeResult
 	session.Stderr = &stderr
 
 	// 执行命令
-	log.Printf("[SSH] Executing command: %s", command)
+	logc.Infof(ctx, "[SSH] Executing command: %s", command)
 	if err := session.Run(command); err != nil {
 		// 如果stderr有内容，返回stderr
 		if stderr.Len() > 0 {
@@ -168,7 +168,7 @@ func ExecuteSSH(ctx context.Context, nc *models.NodeContext) (*models.NodeResult
 	}
 
 	output := stdout.String()
-	log.Printf("[SSH] Command executed successfully, output length: %d", len(output))
+	logc.Infof(ctx, "[SSH] Command executed successfully, output length: %d", len(output))
 
 	return newResult(map[string]any{
 		"output": output,
@@ -192,22 +192,22 @@ func dialSSH(ctx context.Context, network, address string, config *ssh.ClientCon
 		conn, err := dialer.DialContext(ctx, network, address)
 		if err != nil {
 			lastErr = fmt.Errorf("TCP connection failed: %w", err)
-			log.Printf("[SSH] Connection attempt %d/%d failed: %v", i+1, maxRetries, err)
+			logc.Infof(ctx, "[SSH] Connection attempt %d/%d failed: %v", i+1, maxRetries, err)
 			continue
 		}
 
-		log.Printf("[SSH] TCP connection established, performing SSH handshake...")
+		logc.Infof(ctx, "[SSH] TCP connection established, performing SSH handshake...")
 
 		// 升级到SSH连接
 		sshConn, chans, reqs, err := ssh.NewClientConn(conn, address, config)
 		if err != nil {
 			conn.Close()
 			lastErr = fmt.Errorf("SSH handshake failed: %w", err)
-			log.Printf("[SSH] SSH handshake attempt %d/%d failed: %v", i+1, maxRetries, err)
+			logc.Infof(ctx, "[SSH] SSH handshake attempt %d/%d failed: %v", i+1, maxRetries, err)
 			continue
 		}
 
-		log.Printf("[SSH] SSH handshake successful!")
+		logc.Infof(ctx, "[SSH] SSH handshake successful!")
 		return ssh.NewClient(sshConn, chans, reqs), nil
 	}
 

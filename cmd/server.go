@@ -44,10 +44,17 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	r := gin.Default()
+	r := gin.New()
 
-	// Global CORS middleware — must be before any routes to handle preflight OPTIONS
+	// 全局中间件：
+	//   Recovery  - panic 恢复
+	//   TraceID   - 为每个请求注入/透传 trace id（须在日志与业务逻辑之前）
+	//   Cors      - 跨域处理（须在路由之前以处理预检 OPTIONS）
+	//   Logger    - 携带 trace id 的请求日志
+	r.Use(gin.Recovery())
+	r.Use(middleware.TraceID())
 	r.Use(middleware.Cors())
+	r.Use(middleware.Logger())
 
 	// Register routes
 	routes.Register(r)

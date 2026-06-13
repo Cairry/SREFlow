@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"reflect"
 	"regexp"
 	"strings"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/traefik/yaegi/interp"
 	"github.com/traefik/yaegi/stdlib"
+	"github.com/zeromicro/go-zero/core/logc"
 )
 
 // GoScriptExecutor GoScript代码执行器
@@ -58,7 +58,7 @@ func (e *GoScriptExecutor) Execute(ctx context.Context, nodeCtx *models.NodeCont
 	}
 
 	// 执行Go代码
-	result, err := e.executeGoCode(code, inputData, timeout)
+	result, err := e.executeGoCode(ctx, code, inputData, timeout)
 	if err != nil {
 		return e.createErrorResult(err, "execution"), nil
 	}
@@ -69,7 +69,7 @@ func (e *GoScriptExecutor) Execute(ctx context.Context, nodeCtx *models.NodeCont
 }
 
 // executeGoCode 执行Go代码
-func (e *GoScriptExecutor) executeGoCode(code string, input map[string]interface{}, timeout time.Duration) (map[string]interface{}, error) {
+func (e *GoScriptExecutor) executeGoCode(ctx context.Context, code string, input map[string]interface{}, timeout time.Duration) (map[string]interface{}, error) {
 	// 验证代码基本语法
 	if err := e.validateGoCode(code); err != nil {
 		return nil, fmt.Errorf("code validation error: %v", err)
@@ -81,14 +81,14 @@ func (e *GoScriptExecutor) executeGoCode(code string, input map[string]interface
 	// 导入标准库符号
 	for name, symbols := range stdlib.Symbols {
 		if err := i.Use(interp.Exports{name: symbols}); err != nil {
-			log.Printf("[GoScript] Warning: failed to import package %s: %v", name, err)
+			logc.Infof(ctx, "[GoScript] Warning: failed to import package %s: %v", name, err)
 		}
 	}
 
 	// 先声明输出变量（使用 map 类型以便支持结构化数据）
 	_, err := i.Eval("var output map[string]interface{}")
 	if err != nil {
-		log.Printf("[GoScript] Warning: failed to declare output variable: %v", err)
+		logc.Infof(ctx, "[GoScript] Warning: failed to declare output variable: %v", err)
 	}
 
 	// 创建带超时的执行通道
@@ -253,11 +253,6 @@ func (e *GoScriptExecutor) validateGoCode(code string) error {
 		if u.pattern.MatchString(code) {
 			return fmt.Errorf("%s", u.reason)
 		}
-	}
-
-	// 检查是否包含可能引起问题的模式
-	if strings.Count(code, "{") != strings.Count(code, "}") {
-		return fmt.Errorf("mismatched braces")
 	}
 
 	return nil

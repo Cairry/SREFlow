@@ -15,6 +15,7 @@ export interface LLMNodeData extends BaseNodeData {
 export interface SmartRouterNodeData extends BaseNodeData {
   model: string;
   branches: string; // JSON string of branch definitions
+  input?: string; // explicit input data for LLM routing
 }
 
 export interface ConditionNodeData extends BaseNodeData {

@@ -6,12 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"SREFlow/internal/models"
+
+	"github.com/zeromicro/go-zero/core/logc"
 )
 
 // OpenAI API 请求结构
@@ -112,9 +113,9 @@ func (e *LLMExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext) 
 	}
 	messages = append(messages, Message{Role: "user", Content: resolvedPrompt})
 
-	log.Printf("[LLM] Model: %s, BaseURL: %s", modelID, baseURL)
-	log.Printf("[LLM] Prompt: %s", truncateLog(resolvedPrompt, 200))
-	log.Printf("[LLM] Input variables: %d", len(nodeCtx.Input))
+	logc.Infof(ctx, "[LLM] Model: %s, BaseURL: %s", modelID, baseURL)
+	logc.Infof(ctx, "[LLM] Prompt: %s", truncateLog(resolvedPrompt, 200))
+	logc.Infof(ctx, "[LLM] Input variables: %d", len(nodeCtx.Input))
 
 	// 构建请求体
 	request := OpenAIRequest{
@@ -125,13 +126,13 @@ func (e *LLMExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext) 
 
 	bodyBytes, err := json.Marshal(request)
 	if err != nil {
-		log.Printf("[LLM] Failed to marshal request: %v", err)
+		logc.Errorf(ctx, "[LLM] Failed to marshal request: %v", err)
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	log.Printf("[LLM] Sending %d messages to AI API", len(messages))
+	logc.Infof(ctx, "[LLM] Sending %d messages to AI API", len(messages))
 	for i, msg := range messages {
-		log.Printf("[LLM] Message %d: Role=%s, Content=%s", i, msg.Role, truncateLog(msg.Content, 100))
+		logc.Infof(ctx, "[LLM] Message %d: Role=%s, Content=%s", i, msg.Role, truncateLog(msg.Content, 100))
 	}
 
 	// 创建HTTP请求
@@ -140,7 +141,7 @@ func (e *LLMExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext) 
 
 	req, err := http.NewRequestWithContext(httpCtx, "POST", baseURL+"/chat/completions", bytes.NewReader(bodyBytes))
 	if err != nil {
-		log.Printf("[LLM] Failed to create request: %v", err)
+		logc.Errorf(ctx, "[LLM] Failed to create request: %v", err)
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
@@ -149,7 +150,7 @@ func (e *LLMExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext) 
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("User-Agent", "SREFlow/1.0")
 
-	log.Printf("[LLM] API Key: %s...", apiKey[:8])
+	logc.Infof(ctx, "[LLM] API Key: %s...", apiKey[:8])
 
 	// 发送请求
 	start := time.Now()
@@ -158,7 +159,7 @@ func (e *LLMExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext) 
 	latency := time.Since(start).Seconds()
 
 	if err != nil {
-		log.Printf("[LLM] HTTP request error: %v", err)
+		logc.Errorf(ctx, "[LLM] HTTP request error: %v", err)
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
@@ -166,7 +167,7 @@ func (e *LLMExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext) 
 	// 检查响应状态
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		log.Printf("[LLM] API returned status %d: %s", resp.StatusCode, string(body))
+		logc.Errorf(ctx, "[LLM] API returned status %d: %s", resp.StatusCode, string(body))
 
 		var errResp OpenAIErrorResponse
 		if json.Unmarshal(body, &errResp) == nil {
@@ -178,7 +179,7 @@ func (e *LLMExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext) 
 	// 解析响应
 	var openAIResp OpenAIResponse
 	if err := json.NewDecoder(resp.Body).Decode(&openAIResp); err != nil {
-		log.Printf("[LLM] Failed to decode response: %v", err)
+		logc.Errorf(ctx, "[LLM] Failed to decode response: %v", err)
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
@@ -188,7 +189,7 @@ func (e *LLMExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext) 
 	}
 
 	aiResponse := openAIResp.Choices[0].Message.Content
-	log.Printf("[LLM] AI response (%s, %.2fs): %s", modelID, latency, truncateLog(aiResponse, 200))
+	logc.Infof(ctx, "[LLM] AI response (%s, %.2fs): %s", modelID, latency, truncateLog(aiResponse, 200))
 
 	result := map[string]any{
 		"output":  aiResponse,
@@ -210,8 +211,8 @@ func (e *LLMExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext) 
 		result["parsed"] = parsed
 	}
 
-	log.Printf("[LLM] Final result keys: %v", getMapKeys(result))
-	log.Printf("[LLM] Final result: %+v", result)
+	logc.Infof(ctx, "[LLM] Final result keys: %v", getMapKeys(result))
+	logc.Infof(ctx, "[LLM] Final result: %+v", result)
 
 	return &models.NodeResult{Outputs: result}, nil
 }

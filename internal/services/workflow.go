@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -14,6 +13,9 @@ import (
 	"SREFlow/internal/types"
 	"SREFlow/internal/workflow"
 	"SREFlow/pkg/tools"
+	"SREFlow/pkg/trace"
+
+	"github.com/zeromicro/go-zero/core/logc"
 )
 
 // injectStartNodeInput 将 input 参数注入到 Start 节点的 text 字段
@@ -144,20 +146,20 @@ func (s *NewWorkflowService) saveExecutionRecord(execution *models.WorkflowExecu
 }
 
 // printWorkflowLogs 打印工作流执行日志
-func printWorkflowLogs(execution *models.WorkflowExecution) {
-	log.Printf("[Workflow] Execution ID: %s, Workflow: %s, Status: %s", execution.ID, execution.WorkflowName, execution.Status)
+func printWorkflowLogs(ctx context.Context, execution *models.WorkflowExecution) {
+	logc.Infof(ctx, "[Workflow] Execution ID: %s, Workflow: %s, Status: %s", execution.ID, execution.WorkflowName, execution.Status)
 
 	if len(execution.NodeResults) == 0 {
-		log.Printf("[Workflow] No node results recorded.")
+		logc.Infof(ctx, "[Workflow] No node results recorded.")
 		return
 	}
 
 	for nodeID, result := range execution.NodeResults {
+		outputsJSON, _ := json.Marshal(result.Outputs)
 		if result.Error != "" {
-			log.Printf("[Node: %s] ERROR: %s", nodeID, result.Error)
+			logc.Errorf(ctx, "[Node: %s] Failed, outputs: %s", nodeID, string(outputsJSON))
 		} else {
-			outputsJSON, _ := json.Marshal(result.Outputs)
-			log.Printf("[Node: %s] OK, outputs: %s", nodeID, string(outputsJSON))
+			logc.Infof(ctx, "[Node: %s] OK, outputs: %s", nodeID, string(outputsJSON))
 		}
 	}
 }
@@ -183,7 +185,7 @@ func (s *NewWorkflowService) markExecutionCompleted(execution *models.WorkflowEx
 
 // GetWorkflowExecution 获取工作流执行结果
 func (s *NewWorkflowService) GetWorkflowExecution(ctx context.Context, executionID string) (*models.WorkflowExecution, error) {
-	log.Printf("[WorkflowService] Getting workflow execution: %s", executionID)
+	logc.Infof(ctx, "[WorkflowService] Getting workflow execution: %s", executionID)
 
 	// 首先从状态管理器获取节点结果
 	nodeResults := s.stateManager.GetWorkflowNodeResults(executionID)
@@ -199,7 +201,7 @@ func (s *NewWorkflowService) GetWorkflowExecution(ctx context.Context, execution
 		record, dbErr := s.executionRepo.GetByID(executionID)
 		if dbErr == nil && record.NodeResults != "" {
 			if err := json.Unmarshal([]byte(record.NodeResults), &nodeResults); err != nil {
-				log.Printf("[WorkflowService] Failed to parse node results from DB: %v", err)
+				logc.Errorf(ctx, "[WorkflowService] Failed to parse node results from DB: %v", err)
 				nodeResults = make(map[string]*models.NodeResult)
 			}
 		}
@@ -225,7 +227,7 @@ func (s *NewWorkflowService) GetWorkflowExecution(ctx context.Context, execution
 
 // CancelWorkflowExecution 取消工作流执行
 func (s *NewWorkflowService) CancelWorkflowExecution(ctx context.Context, executionID string) error {
-	log.Printf("[WorkflowService] Cancelling workflow execution: %s", executionID)
+	logc.Infof(ctx, "[WorkflowService] Cancelling workflow execution: %s", executionID)
 
 	// 从 map 中取出 cancel func
 	val, ok := s.executionCancelFuncs.Load(executionID)
@@ -292,7 +294,7 @@ func (s *NewWorkflowService) ListWorkflows(workspaceId string) (data interface{}
 		// 转换为 WorkflowWithNodes 以便解析 nodes 和 edges
 		workflowWithNodes, err := repos.ToWorkflowWithNodes(workflow)
 		if err != nil {
-			log.Printf("[WorkflowService] Failed to parse workflow %s: %v", workflow.ID, err)
+			logc.Errorf(context.Background(), "[WorkflowService] Failed to parse workflow %s: %v", workflow.ID, err)
 			continue
 		}
 
@@ -352,7 +354,7 @@ func (s *NewWorkflowService) Create(req interface{}) (data interface{}, err erro
 		Hash:        workflow.CurrentContentHash,
 	}
 	if err := s.versionRepo.Create(initialVersion); err != nil {
-		log.Printf("[WorkflowService] Failed to save initial workflow version: %v", err)
+		logc.Errorf(context.Background(), "[WorkflowService] Failed to save initial workflow version: %v", err)
 	}
 
 	// 转换为响应格式
@@ -434,7 +436,7 @@ func (s *NewWorkflowService) Update(req interface{}) (data interface{}, err erro
 		// 从数据库获取该 workflow 的最大版本号，确保不同 workflow 之间不冲突
 		maxVer, err := s.versionRepo.GetMaxVersion(existingWorkflow.ID)
 		if err != nil {
-			log.Printf("[WorkflowService] Failed to get max version: %v", err)
+			logc.Errorf(context.Background(), "[WorkflowService] Failed to get max version: %v", err)
 			maxVer = existingWorkflow.CurrentVersionNum
 		}
 		newVersionNum := maxVer + 1
@@ -449,7 +451,7 @@ func (s *NewWorkflowService) Update(req interface{}) (data interface{}, err erro
 			Hash:        newHash,
 		}
 		if err := s.versionRepo.Create(version); err != nil {
-			log.Printf("[WorkflowService] Failed to save workflow version: %v", err)
+			logc.Errorf(context.Background(), "[WorkflowService] Failed to save workflow version: %v", err)
 		}
 		// 同步递增 CurrentVersionNum
 		existingWorkflow.CurrentVersionNum = newVersionNum
@@ -724,7 +726,7 @@ func (s *NewWorkflowService) Delete(id string) (data interface{}, err error) {
 
 	// 删除该工作流的所有历史版本
 	if err := s.versionRepo.DeleteByWorkflowID(id); err != nil {
-		log.Printf("[WorkflowService] Failed to delete workflow versions for %s: %v", id, err)
+		logc.Errorf(context.Background(), "[WorkflowService] Failed to delete workflow versions for %s: %v", id, err)
 	}
 
 	return map[string]interface{}{
@@ -767,9 +769,12 @@ func (s *NewWorkflowService) ExecuteAsync(req interface{}) (data interface{}, er
 
 	// 启动异步执行
 	go func() {
-		// 创建可取消的 context，以便支持停止工作流
-		execCtx, cancelExec := context.WithCancel(context.Background())
+		// 创建可取消的 context，并注入请求级 trace id，使逻辑层日志可与接口请求串联
+		baseCtx := trace.WithTraceID(context.Background(), r.TraceID)
+		execCtx, cancelExec := context.WithCancel(baseCtx)
 		s.executionCancelFuncs.Store(execution.ID, cancelExec)
+
+		logc.Infof(execCtx, "[WorkflowService] start executing workflow %s, execution %s", wf.ID, execution.ID)
 
 		defer func() {
 			if r := recover(); r != nil {
@@ -782,12 +787,14 @@ func (s *NewWorkflowService) ExecuteAsync(req interface{}) (data interface{}, er
 		// 解析工作流拓扑
 		topology, err := s.parser.ParseWorkflowFromModel(wf)
 		if err != nil {
+			logc.Errorf(execCtx, "[WorkflowService] failed to parse workflow %s: %v", wf.ID, err)
 			return
 		}
 
 		// 验证工作流
 		registry := s.engine.GetRegistry()
 		if err := s.parser.ValidateWorkflow(topology, registry); err != nil {
+			logc.Errorf(execCtx, "[WorkflowService] workflow validation failed for %s: %v", wf.ID, err)
 			return
 		}
 
@@ -803,7 +810,7 @@ func (s *NewWorkflowService) ExecuteAsync(req interface{}) (data interface{}, er
 		s.saveExecutionRecord(execution)
 
 		// 打印工作流执行日志
-		printWorkflowLogs(execution)
+		printWorkflowLogs(execCtx, execution)
 	}()
 
 	// 立即返回执行ID
@@ -825,7 +832,7 @@ func (s *NewWorkflowService) RegisterEventSSEEventChannel(executionId string) ch
 // UnregisterEventSSEEventChannel 取消注册流式 SSE 事件通道
 func (s *NewWorkflowService) UnregisterEventSSEEventChannel(executionId string) {
 	s.monitor.UnregisterEventSSEEventChannel(executionId)
-	log.Printf("[WorkflowService] Stream SSE channel UNREGISTERED for execution: %s", executionId)
+	logc.Infof(context.Background(), "[WorkflowService] Stream SSE channel UNREGISTERED for execution: %s", executionId)
 }
 
 // GetExecutionResult 获取执行结果
@@ -988,7 +995,7 @@ func (s *NewWorkflowService) GetRunHistory(workflowId string, limit int) (data i
 		var nodeResults map[string]*models.NodeResult
 		if record.NodeResults != "" {
 			if err := json.Unmarshal([]byte(record.NodeResults), &nodeResults); err != nil {
-				log.Printf("[WorkflowService] Failed to parse node results for %s: %v", record.ID, err)
+				logc.Errorf(context.Background(), "[WorkflowService] Failed to parse node results for %s: %v", record.ID, err)
 				nodeResults = make(map[string]*models.NodeResult)
 			}
 		} else {
@@ -999,7 +1006,7 @@ func (s *NewWorkflowService) GetRunHistory(workflowId string, limit int) (data i
 		var variables map[string]any
 		if record.Variables != "" {
 			if err := json.Unmarshal([]byte(record.Variables), &variables); err != nil {
-				log.Printf("[WorkflowService] Failed to parse variables for %s: %v", record.ID, err)
+				logc.Errorf(context.Background(), "[WorkflowService] Failed to parse variables for %s: %v", record.ID, err)
 				variables = make(map[string]any)
 			}
 		} else {
@@ -1044,7 +1051,7 @@ func (s *NewWorkflowService) GetAllRunHistory(limit int) (data interface{}, err 
 		var nodeResults map[string]*models.NodeResult
 		if record.NodeResults != "" {
 			if err := json.Unmarshal([]byte(record.NodeResults), &nodeResults); err != nil {
-				log.Printf("[WorkflowService] Failed to parse node results for %s: %v", record.ID, err)
+				logc.Errorf(context.Background(), "[WorkflowService] Failed to parse node results for %s: %v", record.ID, err)
 				nodeResults = make(map[string]*models.NodeResult)
 			}
 		} else {
@@ -1055,7 +1062,7 @@ func (s *NewWorkflowService) GetAllRunHistory(limit int) (data interface{}, err 
 		var variables map[string]any
 		if record.Variables != "" {
 			if err := json.Unmarshal([]byte(record.Variables), &variables); err != nil {
-				log.Printf("[WorkflowService] Failed to parse variables for %s: %v", record.ID, err)
+				logc.Errorf(context.Background(), "[WorkflowService] Failed to parse variables for %s: %v", record.ID, err)
 				variables = make(map[string]any)
 			}
 		} else {

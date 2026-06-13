@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -13,6 +12,8 @@ import (
 	"time"
 
 	"SREFlow/internal/models"
+
+	"github.com/zeromicro/go-zero/core/logc"
 )
 
 // JaegerExecutor Jaeger追踪执行器
@@ -45,7 +46,7 @@ func (e *JaegerExecutor) Execute(ctx context.Context, nc *models.NodeContext) (*
 	endTime := getStr(nc.Config, "endTime", "")
 	timeout := getInt(nc.Config, "timeout", 30)
 
-	log.Printf("[Jaeger] Querying %s for service: %s, tags: %s", jaegerURL, service, tags)
+	logc.Infof(ctx, "[Jaeger] Querying %s for service: %s, tags: %s", jaegerURL, service, tags)
 
 	// 构建查询参数
 	params := url.Values{}
@@ -85,31 +86,31 @@ func (e *JaegerExecutor) Execute(ctx context.Context, nc *models.NodeContext) (*
 		for k, v := range headers {
 			req.Header.Set(k, v)
 		}
-		log.Printf("[Jaeger] Added headers from config: %v", headers)
+		logc.Infof(ctx, "[Jaeger] Added headers from config: %v", headers)
 	}
 
 	// 添加认证信息
 	if authToken := getStr(nc.Config, "authToken", ""); authToken != "" {
 		req.Header.Set("Authorization", "Bearer "+authToken)
-		log.Printf("[Jaeger] Added Bearer token authentication")
+		logc.Infof(ctx, "[Jaeger] Added Bearer token authentication")
 	}
 	if authUsername := getStr(nc.Config, "authUsername", ""); authUsername != "" {
 		authPassword := getStr(nc.Config, "authPassword", "")
 		req.SetBasicAuth(authUsername, authPassword)
-		log.Printf("[Jaeger] Added Basic authentication for user: %s", authUsername)
+		logc.Infof(ctx, "[Jaeger] Added Basic authentication for user: %s", authUsername)
 	}
 	if authAPIKey := getStr(nc.Config, "authAPIKey", ""); authAPIKey != "" {
 		authAPIKeyName := getStr(nc.Config, "authAPIKeyName", "X-API-Key")
 		authAPIKeyIn := getStr(nc.Config, "authAPIKeyIn", "header")
 		if authAPIKeyIn == "header" {
 			req.Header.Set(authAPIKeyName, authAPIKey)
-			log.Printf("[Jaeger] Added API Key in header: %s", authAPIKeyName)
+			logc.Infof(ctx, "[Jaeger] Added API Key in header: %s", authAPIKeyName)
 		} else {
 			// Add to query parameters
 			if q := req.URL.Query(); q != nil {
 				q.Add(authAPIKeyName, authAPIKey)
 				req.URL.RawQuery = q.Encode()
-				log.Printf("[Jaeger] Added API Key in query parameter: %s", authAPIKeyName)
+				logc.Infof(ctx, "[Jaeger] Added API Key in query parameter: %s", authAPIKeyName)
 			}
 		}
 	}
@@ -137,7 +138,7 @@ func (e *JaegerExecutor) Execute(ctx context.Context, nc *models.NodeContext) (*
 		return errorResult("invalid jaeger response: no data field"), nil
 	}
 
-	log.Printf("[Jaeger] Query returned %d traces", len(traces))
+	logc.Infof(ctx, "[Jaeger] Query returned %d traces", len(traces))
 
 	// 处理追踪结果
 	var processedTraces []map[string]any

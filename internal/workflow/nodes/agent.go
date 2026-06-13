@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +14,7 @@ import (
 	"github.com/cloudwego/eino/flow/agent/react"
 	"github.com/cloudwego/eino/schema"
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/zeromicro/go-zero/core/logc"
 
 	"SREFlow/internal/models"
 	"SREFlow/internal/repos"
@@ -120,9 +120,9 @@ func (e *AgentExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext
 	}
 
 	// 加载选中的 Skills（提取工具提示 + 构建内容查找表）
-	skillContents, toolHints, err := e.loadSkills(skillIDsStr)
+	skillContents, toolHints, err := e.loadSkills(ctx, skillIDsStr)
 	if err != nil {
-		log.Printf("[Agent] Failed to load skills: %v", err)
+		logc.Errorf(ctx, "[Agent] Failed to load skills: %v", err)
 	}
 
 	// 加载 MCP 工具（当选择了 Skill 或 MCP 工具时）
@@ -131,11 +131,11 @@ func (e *AgentExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext
 		var loadErr error
 		einoTools, loadErr = e.loadMCPTools(ctx, nodeCtx.WorkspaceID, toolHints, selectedTools)
 		if loadErr != nil {
-			log.Printf("[Agent] Failed to load MCP tools: %v", loadErr)
+			logc.Errorf(ctx, "[Agent] Failed to load MCP tools: %v", loadErr)
 		}
 	}
 
-	log.Printf("[Agent] Model: %s, MaxIterations: %d, Tools: %d, Skills: %d, SelectedTools: %d",
+	logc.Infof(ctx, "[Agent] Model: %s, MaxIterations: %d, Tools: %d, Skills: %d, SelectedTools: %d",
 		modelID, maxIterations, len(einoTools), len(skillContents), len(selectedTools))
 
 	// 创建 eino OpenAI ChatModel
@@ -221,7 +221,7 @@ func (e *AgentExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext
 		return nil, fmt.Errorf("agent execution failed: %w", err)
 	}
 
-	log.Printf("[Agent] Final response (%.2fs): %s", latency, truncateLog(msg.Content, 300))
+	logc.Infof(ctx, "[Agent] Final response (%.2fs): %s", latency, truncateLog(msg.Content, 300))
 
 	result := map[string]any{
 		"output":     msg.Content,
@@ -307,7 +307,7 @@ func getSkillIDsStr(cfg map[string]any) string {
 // --- Skill 加载 ---
 
 // loadSkills 加载选中的 Skill，返回 name->content 映射，同时提取工具提示
-func (e *AgentExecutor) loadSkills(skillIDsStr string) (map[string]string, []toolHint, error) {
+func (e *AgentExecutor) loadSkills(ctx context.Context, skillIDsStr string) (map[string]string, []toolHint, error) {
 	if skillIDsStr == "" {
 		return nil, nil, nil
 	}
@@ -333,7 +333,7 @@ func (e *AgentExecutor) loadSkills(skillIDsStr string) (map[string]string, []too
 			continue
 		}
 		contents[sk.Name] = sk.Content
-		h := extractToolHints(sk.Content)
+		h := extractToolHints(ctx, sk.Content)
 		hints = append(hints, h...)
 	}
 	return contents, hints, nil
@@ -344,7 +344,7 @@ func (e *AgentExecutor) loadSkills(skillIDsStr string) (map[string]string, []too
 //
 //	@server:server_name    - 指定 MCP Server（该 server 下所有工具）
 //	@tool:server.tool      - 指定 server 下的工具名
-func extractToolHints(content string) []toolHint {
+func extractToolHints(ctx context.Context, content string) []toolHint {
 	var hints []toolHint
 	seen := make(map[string]bool)
 
@@ -404,7 +404,7 @@ func extractToolHints(content string) []toolHint {
 	}
 
 	if len(hints) > 0 {
-		log.Printf("[Agent] Extracted %d tool hints from skills", len(hints))
+		logc.Infof(ctx, "[Agent] Extracted %d tool hints from skills", len(hints))
 	}
 	return hints
 }
@@ -470,19 +470,19 @@ func (e *AgentExecutor) loadMCPTools(ctx context.Context, workspaceID string, hi
 		var headers map[string]string
 		if server.Headers != "" {
 			if err := json.Unmarshal([]byte(server.Headers), &headers); err != nil {
-				log.Printf("[Agent] Failed to parse headers for server %s: %v", server.ID, err)
+				logc.Errorf(ctx, "[Agent] Failed to parse headers for server %s: %v", server.ID, err)
 			}
 		}
 
 		// 获取 MCP 客户端
-		log.Printf("[Agent] Connecting to MCP server: name=%s, id=%s, url=%s, type=%s", server.Name, server.ID, server.URL, server.Type)
+		logc.Infof(ctx, "[Agent] Connecting to MCP server: name=%s, id=%s, url=%s, type=%s", server.Name, server.ID, server.URL, server.Type)
 		client, err := mcppool.DefaultMCPPool.GetOrCreateClient(ctx, server.ID, server.URL, server.Type, headers, server.APIKey, server.Timeout)
 		if err != nil {
-			log.Printf("[Agent] Initial connect failed for server %s (%s): %v, retrying with fresh client...", server.Name, server.ID, err)
+			logc.Errorf(ctx, "[Agent] Initial connect failed for server %s (%s): %v, retrying with fresh client...", server.Name, server.ID, err)
 			mcppool.DefaultMCPPool.RemoveClient(server.ID)
 			client, err = mcppool.DefaultMCPPool.GetOrCreateClient(ctx, server.ID, server.URL, server.Type, headers, server.APIKey, server.Timeout)
 			if err != nil {
-				log.Printf("[Agent] Retry connect failed for server %s (%s): %v", server.Name, server.ID, err)
+				logc.Errorf(ctx, "[Agent] Retry connect failed for server %s (%s): %v", server.Name, server.ID, err)
 				continue
 			}
 		}
@@ -490,21 +490,21 @@ func (e *AgentExecutor) loadMCPTools(ctx context.Context, workspaceID string, hi
 		// 列出工具
 		result, err := client.ListTools(ctx, mcp.ListToolsRequest{})
 		if err != nil {
-			log.Printf("[Agent] ListTools failed for server %s (%s): %v, closing stale session and retrying...", server.Name, server.ID, err)
+			logc.Errorf(ctx, "[Agent] ListTools failed for server %s (%s): %v, closing stale session and retrying...", server.Name, server.ID, err)
 			mcppool.DefaultMCPPool.RemoveClient(server.ID)
 			client, err = mcppool.DefaultMCPPool.GetOrCreateClient(ctx, server.ID, server.URL, server.Type, headers, server.APIKey, server.Timeout)
 			if err != nil {
-				log.Printf("[Agent] Reconnect failed for server %s (%s): %v", server.Name, server.ID, err)
+				logc.Errorf(ctx, "[Agent] Reconnect failed for server %s (%s): %v", server.Name, server.ID, err)
 				continue
 			}
 			result, err = client.ListTools(ctx, mcp.ListToolsRequest{})
 			if err != nil {
-				log.Printf("[Agent] ListTools retry failed for server %s (%s): %v", server.Name, server.ID, err)
+				logc.Errorf(ctx, "[Agent] ListTools retry failed for server %s (%s): %v", server.Name, server.ID, err)
 				mcppool.DefaultMCPPool.RemoveClient(server.ID)
 				continue
 			}
 		}
-		log.Printf("[Agent] Server %s (%s): listed %d tools", server.Name, server.ID, len(result.Tools))
+		logc.Infof(ctx, "[Agent] Server %s (%s): listed %d tools", server.Name, server.ID, len(result.Tools))
 
 		for _, mcpTool := range result.Tools {
 			// 用户选定工具过滤
@@ -562,9 +562,9 @@ func (e *AgentExecutor) loadMCPTools(ctx context.Context, workspaceID string, hi
 	}
 
 	if len(hints) > 0 {
-		log.Printf("[Agent] Loaded %d tools (filtered %d by skill hints)", len(tools), filteredCount)
+		logc.Infof(ctx, "[Agent] Loaded %d tools (filtered %d by skill hints)", len(tools), filteredCount)
 	} else {
-		log.Printf("[Agent] Loaded %d tools (no hints, all available)", len(tools))
+		logc.Infof(ctx, "[Agent] Loaded %d tools (no hints, all available)", len(tools))
 	}
 	return tools, nil
 }
@@ -606,11 +606,11 @@ func (e *AgentExecutor) callMCPTool(ctx context.Context, serverID, toolName stri
 		}
 	}
 
-	log.Printf("[Agent] Calling MCP tool: server=%s (%s), tool=%s", server.Name, serverID, actualToolName)
+	logc.Infof(ctx, "[Agent] Calling MCP tool: server=%s (%s), tool=%s", server.Name, serverID, actualToolName)
 
 	client, err := mcppool.DefaultMCPPool.GetOrCreateClient(ctx, serverID, server.URL, server.Type, headers, server.APIKey, server.Timeout)
 	if err != nil {
-		log.Printf("[Agent] Initial connect failed for server %s: %v, retrying...", server.Name, err)
+		logc.Errorf(ctx, "[Agent] Initial connect failed for server %s: %v, retrying...", server.Name, err)
 		mcppool.DefaultMCPPool.RemoveClient(serverID)
 		client, err = mcppool.DefaultMCPPool.GetOrCreateClient(ctx, serverID, server.URL, server.Type, headers, server.APIKey, server.Timeout)
 		if err != nil {
@@ -625,7 +625,7 @@ func (e *AgentExecutor) callMCPTool(ctx context.Context, serverID, toolName stri
 		},
 	})
 	if err != nil {
-		log.Printf("[Agent] CallTool failed for %s on server %s: %v, closing stale session and retrying...", actualToolName, server.Name, err)
+		logc.Errorf(ctx, "[Agent] CallTool failed for %s on server %s: %v, closing stale session and retrying...", actualToolName, server.Name, err)
 		mcppool.DefaultMCPPool.RemoveClient(serverID)
 		client, err = mcppool.DefaultMCPPool.GetOrCreateClient(ctx, serverID, server.URL, server.Type, headers, server.APIKey, server.Timeout)
 		if err != nil {
@@ -638,13 +638,13 @@ func (e *AgentExecutor) callMCPTool(ctx context.Context, serverID, toolName stri
 			},
 		})
 		if err != nil {
-			log.Printf("[Agent] CallTool retry failed for %s on server %s: %v", actualToolName, server.Name, err)
+			logc.Errorf(ctx, "[Agent] CallTool retry failed for %s on server %s: %v", actualToolName, server.Name, err)
 			mcppool.DefaultMCPPool.RemoveClient(serverID)
 			return nil, fmt.Errorf("tool call %s failed after retry: %w", actualToolName, err)
 		}
 	}
 
-	log.Printf("[Agent] MCP tool %s call succeeded on server %s", actualToolName, server.Name)
+	logc.Infof(ctx, "[Agent] MCP tool %s call succeeded on server %s", actualToolName, server.Name)
 	return result, nil
 }
 

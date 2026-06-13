@@ -75,6 +75,7 @@ function getNodeLabel(node: WorkflowNode): string {
     case "Loki": return "Loki Log";
     case "ClickHouse": return "ClickHouse Query";
     case "Condition": return "Condition";
+    case "SmartRouter": return "SmartRouter";
     case "Output": return "Output";
     case "Start": return "Start";
     case "GoScript": return "GoScript";

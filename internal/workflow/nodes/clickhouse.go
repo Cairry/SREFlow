@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
 	"SREFlow/internal/models"
+
+	"github.com/zeromicro/go-zero/core/logc"
 )
 
 // ClickHouseExecutor ClickHouse SQL执行器
@@ -47,7 +48,7 @@ func (e *ClickHouseExecutor) Execute(ctx context.Context, nodeCtx *models.NodeCo
 		return errorResult("query is required"), nil
 	}
 
-	log.Printf("[ClickHouse] Querying %s database %s: %s", clickhouseURL, database, sqlQuery)
+	logc.Infof(ctx, "[ClickHouse] Querying %s database %s: %s", clickhouseURL, database, sqlQuery)
 
 	// 构建ClickHouse HTTP API URL
 	apiURL := fmt.Sprintf("%s", strings.TrimSuffix(clickhouseURL, "/"))
@@ -80,7 +81,7 @@ func (e *ClickHouseExecutor) Execute(ctx context.Context, nodeCtx *models.NodeCo
 		} else {
 			req.SetBasicAuth(authUsername, "")
 		}
-		log.Printf("[ClickHouse] Using authentication for user: %s", authUsername)
+		logc.Infof(ctx, "[ClickHouse] Using authentication for user: %s", authUsername)
 	}
 
 	// 设置请求头
@@ -93,13 +94,13 @@ func (e *ClickHouseExecutor) Execute(ctx context.Context, nodeCtx *models.NodeCo
 		for k, v := range headers {
 			req.Header.Set(k, v)
 		}
-		log.Printf("[ClickHouse] Added headers from config: %v", headers)
+		logc.Infof(ctx, "[ClickHouse] Added headers from config: %v", headers)
 	}
 
 	// 添加Bearer token认证
 	if authToken := getStr(nodeCtx.Config, "authToken", ""); authToken != "" {
 		req.Header.Set("Authorization", "Bearer "+authToken)
-		log.Printf("[ClickHouse] Added Bearer token authentication")
+		logc.Infof(ctx, "[ClickHouse] Added Bearer token authentication")
 	}
 
 	// 添加API Key认证
@@ -108,13 +109,13 @@ func (e *ClickHouseExecutor) Execute(ctx context.Context, nodeCtx *models.NodeCo
 		authAPIKeyIn := getStr(nodeCtx.Config, "authAPIKeyIn", "header")
 		if authAPIKeyIn == "header" {
 			req.Header.Set(authAPIKeyName, authAPIKey)
-			log.Printf("[ClickHouse] Added API Key in header: %s", authAPIKeyName)
+			logc.Infof(ctx, "[ClickHouse] Added API Key in header: %s", authAPIKeyName)
 		} else {
 			// Add to query parameters
 			if q := req.URL.Query(); q != nil {
 				q.Add(authAPIKeyName, authAPIKey)
 				req.URL.RawQuery = q.Encode()
-				log.Printf("[ClickHouse] Added API Key in query parameter: %s", authAPIKeyName)
+				logc.Infof(ctx, "[ClickHouse] Added API Key in query parameter: %s", authAPIKeyName)
 			}
 		}
 	}
@@ -144,7 +145,7 @@ func (e *ClickHouseExecutor) Execute(ctx context.Context, nodeCtx *models.NodeCo
 		result = string(body)
 	}
 
-	log.Printf("[ClickHouse] Query executed successfully, response size: %d bytes", len(body))
+	logc.Infof(ctx, "[ClickHouse] Query executed successfully, response size: %d bytes", len(body))
 
 	return newResult(map[string]any{
 		"data": result,

@@ -1,11 +1,13 @@
 package workflow
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 
 	"SREFlow/internal/models"
+
+	"github.com/zeromicro/go-zero/core/logc"
 )
 
 // WorkflowParser 工作流解析器
@@ -94,7 +96,7 @@ func (p *WorkflowParser) ValidateWorkflow(topology *WorkflowTopology, registry *
 	// 检测孤立节点（没有连接线的节点），但不阻塞工作流
 	isolatedNodes := p.detectIsolatedNodes(topology)
 	if len(isolatedNodes) > 0 {
-		log.Printf("[Parser] Found %d isolated nodes without connections: %v (will be skipped)", len(isolatedNodes), isolatedNodes)
+		logc.Infof(context.Background(), "[Parser] Found %d isolated nodes without connections: %v (will be skipped)", len(isolatedNodes), isolatedNodes)
 		// 不返回错误，允许工作流继续执行，仅跳过孤立节点
 	}
 

@@ -3,7 +3,8 @@ package nodes
 import (
 	"SREFlow/internal/models"
 	"context"
-	"log"
+
+	"github.com/zeromicro/go-zero/core/logc"
 )
 
 // TopologyExecutor 拓扑查询执行器
@@ -31,7 +32,7 @@ func (e *TopologyExecutor) Execute(ctx context.Context, nodeCtx *models.NodeCont
 	service := getStr(nodeCtx.Config, "service", "")
 	env := getStr(nodeCtx.Config, "environment", "prod")
 
-	log.Printf("[Topology] Querying topology for service: %s (%s)", service, env)
+	logc.Infof(ctx, "[Topology] Querying topology for service: %s (%s)", service, env)
 
 	return newResult(map[string]any{
 		"nodes": map[string]any{

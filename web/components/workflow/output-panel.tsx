@@ -224,66 +224,68 @@ export function OutputPanel({
                   
                   {isExpanded && (
                     <div className="p-3 border-t border-workflow-border/50 bg-workflow-surface/50">
-                      {item.error ? (
-                        <div className="space-y-2">
-                          <div className="text-xs font-mono text-red-500">Error:</div>
-                          <div className="p-2 bg-red-500/10 border border-red-500/30 rounded font-mono text-xs text-red-400 break-all">
-                            {item.error}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <div className="text-xs font-mono text-workflow-text-muted">Output:</div>
-                            <div className="flex gap-1">
-                              {item.output && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleCopy(item.output!);
-                                  }}
-                                  className="p-1 hover:bg-workflow-surface rounded transition-colors duration-200"
-                                  title="Copy output"
-                                >
-                                  <Copy className="w-3 h-3" />
-                                </button>
-                              )}
-                              {item.output && item.nodeType === "Output" && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDownload(item.output!);
-                                  }}
-                                  className="p-1 hover:bg-workflow-surface rounded transition-colors duration-200"
-                                  title="Download output"
-                                >
-                                  <Download className="w-3 h-3" />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                          <div className="p-2 bg-workflow-node-input/30 border border-workflow-border/30 rounded font-mono text-xs text-workflow-text break-all max-h-40 overflow-y-auto">
-                            {item.outputs && Object.keys(item.outputs).length > 0 ? (
-                              <div className="space-y-1">
-                                {Object.entries(item.outputs).map(([key, value]) => (
-                                  <div key={key} className="border-b border-workflow-border/30 pb-1 last:border-b-0">
-                                    <div className="text-xs font-semibold text-workflow-text-muted mb-1">{key}:</div>
-                                    <div className="text-xs text-workflow-text whitespace-pre-wrap">
-                                      {typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : item.output ? (
-                              formatOutput(item.output, 500)
-                            ) : hasResults ? (
-                              <div className="text-xs text-workflow-text-muted italic">No output</div>
-                            ) : (
-                              <div className="text-xs text-workflow-text-muted italic">Waiting for output...</div>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs font-mono text-workflow-text-muted">Output:</div>
+                          <div className="flex gap-1">
+                            {item.output && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopy(item.output!);
+                                }}
+                                className="p-1 hover:bg-workflow-surface rounded transition-colors duration-200"
+                                title="Copy output"
+                              >
+                                <Copy className="w-3 h-3" />
+                              </button>
+                            )}
+                            {item.output && item.nodeType === "Output" && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDownload(item.output!);
+                                }}
+                                className="p-1 hover:bg-workflow-surface rounded transition-colors duration-200"
+                                title="Download output"
+                              >
+                                <Download className="w-3 h-3" />
+                              </button>
                             )}
                           </div>
                         </div>
-                      )}
+                        <div className="p-2 bg-workflow-node-input/30 border border-workflow-border/30 rounded font-mono text-xs text-workflow-text break-all max-h-40 overflow-y-auto">
+                          {item.outputs && Object.keys(item.outputs).length > 0 ? (
+                            <div className="space-y-1">
+                              {Object.entries(item.outputs).map(([key, value]) => {
+                                const isErrorField = key === 'error' && value && String(value).length > 0;
+                                return (
+                                  <div key={key} className="border-b border-workflow-border/30 pb-1 last:border-b-0">
+                                    <div className={cn(
+                                      "text-xs font-semibold mb-1",
+                                      isErrorField ? "text-red-500" : "text-workflow-text-muted"
+                                    )}>{key}:</div>
+                                    <div className={cn(
+                                      "text-xs whitespace-pre-wrap",
+                                      isErrorField ? "text-red-400" : "text-workflow-text"
+                                    )}>
+                                      {typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : item.error ? (
+                            <div className="text-red-400">{item.error}</div>
+                          ) : item.output ? (
+                            formatOutput(item.output, 500)
+                          ) : hasResults ? (
+                            <div className="text-xs text-workflow-text-muted italic">No output</div>
+                          ) : (
+                            <div className="text-xs text-workflow-text-muted italic">Waiting for output...</div>
+                          )}
+                        </div>
+                      </div>
                       <div className="mt-2 text-xs font-mono text-workflow-text-muted">
                         {item.status === "running" ? (
                           <span className="text-blue-400">Processing...</span>

@@ -11,6 +11,7 @@ import (
 	ctxutil "SREFlow/internal/ctx"
 	"SREFlow/internal/services"
 	"SREFlow/internal/types"
+	"SREFlow/pkg/trace"
 
 	"github.com/gin-gonic/gin"
 )
@@ -201,6 +202,8 @@ func executeWorkflow(c *gin.Context) {
 	if mode == "json" {
 		r.RawBody = string(rawBody)
 	}
+	// 从请求 context 透传 trace id，使异步执行的逻辑层日志可串联
+	r.TraceID = trace.FromContext(c.Request.Context())
 
 	// 验证 input 参数：input 为空且数据库中 Start 节点 text 也为空时返回 400
 	ap := ctxutil.DO()

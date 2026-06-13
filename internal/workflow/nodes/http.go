@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"SREFlow/internal/models"
+
+	"github.com/zeromicro/go-zero/core/logc"
 )
 
 // HTTPExecutor HTTP请求执行器
@@ -44,7 +45,7 @@ func (e *HTTPExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext)
 		return errorResult("url is required"), nil
 	}
 
-	log.Printf("[HTTP] Sending %s request to %s", method, url)
+	logc.Infof(ctx, "[HTTP] Sending %s request to %s", method, url)
 
 	// 替换模板变量
 	resolvedBody := resolveTemplateVars(body, nodeCtx.Input)
@@ -107,7 +108,7 @@ func (e *HTTPExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext)
 		}
 	}
 
-	log.Printf("[HTTP] Response status: %d, body length: %d", resp.StatusCode, len(bodyBytes))
+	logc.Infof(ctx, "[HTTP] Response status: %d, body length: %d", resp.StatusCode, len(bodyBytes))
 
 	return newResult(map[string]any{
 		"url":             url,

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -13,6 +12,8 @@ import (
 	"time"
 
 	"SREFlow/internal/models"
+
+	"github.com/zeromicro/go-zero/core/logc"
 )
 
 // LokiExecutor Loki日志查询执行器
@@ -49,7 +50,7 @@ func (e *LokiExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext)
 		return errorResult("query is required"), nil
 	}
 
-	log.Printf("[Loki] Querying %s: %s", lokiURL, query)
+	logc.Infof(ctx, "[Loki] Querying %s: %s", lokiURL, query)
 
 	// 构建查询参数
 	params := url.Values{}
@@ -87,7 +88,7 @@ func (e *LokiExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext)
 		for k, v := range headers {
 			req.Header.Set(k, v)
 		}
-		log.Printf("[Loki] Added headers from config: %v", headers)
+		logc.Infof(ctx, "[Loki] Added headers from config: %v", headers)
 	}
 
 	// 添加认证信息 - 优先使用从数据源合并的认证配置
@@ -95,13 +96,13 @@ func (e *LokiExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext)
 	password := getStr(nodeCtx.Config, "authPassword", "")
 	if username != "" {
 		req.SetBasicAuth(username, password)
-		log.Printf("[Loki] Added Basic authentication for user: %s", username)
+		logc.Infof(ctx, "[Loki] Added Basic authentication for user: %s", username)
 	}
 
 	// 添加Bearer token认证
 	if authToken := getStr(nodeCtx.Config, "authToken", ""); authToken != "" {
 		req.Header.Set("Authorization", "Bearer "+authToken)
-		log.Printf("[Loki] Added Bearer token authentication")
+		logc.Infof(ctx, "[Loki] Added Bearer token authentication")
 	}
 
 	// 添加API Key认证
@@ -110,13 +111,13 @@ func (e *LokiExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext)
 		authAPIKeyIn := getStr(nodeCtx.Config, "authAPIKeyIn", "header")
 		if authAPIKeyIn == "header" {
 			req.Header.Set(authAPIKeyName, authAPIKey)
-			log.Printf("[Loki] Added API Key in header: %s", authAPIKeyName)
+			logc.Infof(ctx, "[Loki] Added API Key in header: %s", authAPIKeyName)
 		} else {
 			// Add to query parameters
 			if q := req.URL.Query(); q != nil {
 				q.Add(authAPIKeyName, authAPIKey)
 				req.URL.RawQuery = q.Encode()
-				log.Printf("[Loki] Added API Key in query parameter: %s", authAPIKeyName)
+				logc.Infof(ctx, "[Loki] Added API Key in query parameter: %s", authAPIKeyName)
 			}
 		}
 	}
@@ -162,7 +163,7 @@ func (e *LokiExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext)
 		return errorResult("invalid loki response: no result field"), nil
 	}
 
-	log.Printf("[Loki] Query returned %d series (type: %s)", len(series), resultType)
+	logc.Infof(ctx, "[Loki] Query returned %d series (type: %s)", len(series), resultType)
 
 	// 处理查询结果
 	var processedSeries []map[string]any

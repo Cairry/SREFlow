@@ -78,6 +78,7 @@ export const defaultNodeData: Record<WorkflowNodeType, object> = {
     label: "SmartRouter",
     model: "",
     branches: "[]",
+    input: "",
   },
   Prometheus: {
     label: "Prometheus",

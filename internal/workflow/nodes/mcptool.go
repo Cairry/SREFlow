@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/zeromicro/go-zero/core/logc"
 
 	"SREFlow/internal/models"
 	"SREFlow/internal/repos"
@@ -57,7 +57,7 @@ func (e *MCPToolExecutor) Execute(ctx context.Context, nodeCtx *models.NodeConte
 	var headers map[string]string
 	if server.Headers != "" {
 		if err := json.Unmarshal([]byte(server.Headers), &headers); err != nil {
-			log.Printf("[MCPTool] Failed to parse headers for server %s: %v", serverID, err)
+			logc.Errorf(ctx, "[MCPTool] Failed to parse headers for server %s: %v", serverID, err)
 		}
 	}
 
@@ -72,7 +72,7 @@ func (e *MCPToolExecutor) Execute(ctx context.Context, nodeCtx *models.NodeConte
 		}
 	}
 
-	log.Printf("[MCPTool] Calling %s/%s with args: %v", server.Name, toolName, arguments)
+	logc.Infof(ctx, "[MCPTool] Calling %s/%s with args: %v", server.Name, toolName, arguments)
 
 	// Call tool via MCP protocol
 	result, err := client.CallTool(ctx, mcp.CallToolRequest{

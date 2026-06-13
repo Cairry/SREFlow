@@ -15,9 +15,10 @@ import (
 type RequestWorkflowExecute struct {
 	TenantId   string `json:"tenantId"`
 	WorkflowId string `json:"workflowId"`
-	Input      string `json:"input"`  // Start 节点 text 参数 (mode=text 时使用)
-	Mode       string `json:"-"`      // 执行模式: json/text，从 query param 读取，不从 body 解析
-	RawBody    string `json:"-"`      // mode=json 时，原始 body 内容
+	Input      string `json:"input"` // Start 节点 text 参数 (mode=text 时使用)
+	Mode       string `json:"-"`     // 执行模式: json/text，从 query param 读取，不从 body 解析
+	RawBody    string `json:"-"`     // mode=json 时，原始 body 内容
+	TraceID    string `json:"-"`     // 请求级 trace id，用于贯穿异步执行的逻辑层日志
 }
 
 func (execute *RequestWorkflowExecute) Valid(ctx context.Context, database repos.EntryInter, cache cache.EntryInter) error {

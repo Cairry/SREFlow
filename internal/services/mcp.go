@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/zeromicro/go-zero/core/logc"
 
 	"SREFlow/internal/models"
 	"SREFlow/internal/repos"
@@ -157,7 +157,7 @@ func (s *MCPService) ListTools(c context.Context, id string) (interface{}, error
 		return nil, fmt.Errorf("server not found: %w", err)
 	}
 
-	log.Printf("[MCPService] ListTools: serverID=%s, name=%s, type=%s, url=%s, timeout=%d, enabled=%v",
+	logc.Infof(c, "[MCPService] ListTools: serverID=%s, name=%s, type=%s, url=%s, timeout=%d, enabled=%v",
 		server.ID, server.Name, server.Type, server.URL, server.Timeout, server.Enabled)
 
 	if !server.Enabled {
@@ -166,10 +166,10 @@ func (s *MCPService) ListTools(c context.Context, id string) (interface{}, error
 
 	// Quick HTTP health-check to verify the server URL is reachable before creating MCP client
 	if err := s.probeEndpoint(server.URL); err != nil {
-		log.Printf("[MCPService] Health check failed for %s: %v", server.URL, err)
+		logc.Errorf(c, "[MCPService] Health check failed for %s: %v", server.URL, err)
 		return nil, fmt.Errorf("MCP server unreachable at %s: %w", server.URL, err)
 	}
-	log.Printf("[MCPService] Health check passed for %s", server.URL)
+	logc.Infof(c, "[MCPService] Health check passed for %s", server.URL)
 
 	headers := s.parseHeaders(server)
 
@@ -181,7 +181,7 @@ func (s *MCPService) ListTools(c context.Context, id string) (interface{}, error
 
 	result, err := client.ListTools(c, mcp.ListToolsRequest{})
 	if err != nil {
-		log.Printf("[MCPService] ListTools failed for %s (%s): %v, removing stale session and retrying...", server.Name, id, err)
+		logc.Errorf(c, "[MCPService] ListTools failed for %s (%s): %v, removing stale session and retrying...", server.Name, id, err)
 		mcppool.DefaultMCPPool.RemoveClient(id)
 		client, err = mcppool.DefaultMCPPool.GetOrCreateClient(c, id, server.URL, server.Type, headers, server.APIKey, server.Timeout)
 		if err != nil {
@@ -241,7 +241,7 @@ func (s *MCPService) CallTool(c context.Context, id string, toolName string, arg
 		return nil, fmt.Errorf("failed to connect to MCP server: %w", err)
 	}
 
-	log.Printf("[MCPService] Calling tool %s on server %s", toolName, server.Name)
+	logc.Infof(c, "[MCPService] Calling tool %s on server %s", toolName, server.Name)
 
 	result, err := client.CallTool(c, mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
@@ -250,7 +250,7 @@ func (s *MCPService) CallTool(c context.Context, id string, toolName string, arg
 		},
 	})
 	if err != nil {
-		log.Printf("[MCPService] CallTool failed for %s on %s (%s): %v, removing stale session and retrying...", toolName, server.Name, id, err)
+		logc.Errorf(c, "[MCPService] CallTool failed for %s on %s (%s): %v, removing stale session and retrying...", toolName, server.Name, id, err)
 		mcppool.DefaultMCPPool.RemoveClient(id)
 		client, err = mcppool.DefaultMCPPool.GetOrCreateClient(c, id, server.URL, server.Type, headers, server.APIKey, server.Timeout)
 		if err != nil {
@@ -321,7 +321,7 @@ func (s *MCPService) GetStatus(c context.Context, id string) (interface{}, error
 	}
 
 	if err := client.Ping(c); err != nil {
-		log.Printf("[MCPService] Ping failed for %s (%s): %v, removing stale session and retrying...", server.Name, id, err)
+		logc.Errorf(c, "[MCPService] Ping failed for %s (%s): %v, removing stale session and retrying...", server.Name, id, err)
 		mcppool.DefaultMCPPool.RemoveClient(id)
 		client, err = mcppool.DefaultMCPPool.GetOrCreateClient(c, id, server.URL, server.Type, headers, server.APIKey, server.Timeout)
 		if err != nil {
@@ -391,7 +391,7 @@ func (s *MCPService) probeEndpoint(url string) error {
 		return fmt.Errorf("HTTP probe failed: %w", err)
 	}
 	resp.Body.Close()
-	log.Printf("[MCPService] Probe endpoint %s returned HTTP %d", url, resp.StatusCode)
+	logc.Infof(context.Background(), "[MCPService] Probe endpoint %s returned HTTP %d", url, resp.StatusCode)
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("HTTP probe returned status %d — the MCP SSE endpoint URL may be incorrect (SSE servers typically require a path such as /sse)", resp.StatusCode)
 	}

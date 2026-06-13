@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
 
 	"SREFlow/internal/models"
 	"SREFlow/internal/repos"
 
+	"github.com/zeromicro/go-zero/core/logc"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -99,7 +99,7 @@ func executePodStatus(ctx context.Context, clientset *kubernetes.Clientset, name
 			podStatuses = append(podStatuses, formatPodStatus(&p))
 		}
 
-		log.Printf("[Kubernetes] Listed %d pods in namespace %s", len(podStatuses), namespace)
+		logc.Infof(ctx, "[Kubernetes] Listed %d pods in namespace %s", len(podStatuses), namespace)
 
 		return newResult(map[string]any{
 			"pods":      podStatuses,
@@ -114,7 +114,7 @@ func executePodStatus(ctx context.Context, clientset *kubernetes.Clientset, name
 		return errorResult(fmt.Sprintf("failed to get pod %s/%s: %v", namespace, pod, err)), nil
 	}
 
-	log.Printf("[Kubernetes] Got pod %s/%s status", namespace, pod)
+	logc.Infof(ctx, "[Kubernetes] Got pod %s/%s status", namespace, pod)
 
 	return newResult(map[string]any{
 		"pod":       formatPodStatus(p),
@@ -135,7 +135,7 @@ func executePodEvents(ctx context.Context, clientset *kubernetes.Clientset, name
 			eventList = append(eventList, formatEvent(&e))
 		}
 
-		log.Printf("[Kubernetes] Listed %d events in namespace %s", len(eventList), namespace)
+		logc.Infof(ctx, "[Kubernetes] Listed %d events in namespace %s", len(eventList), namespace)
 
 		return newResult(map[string]any{
 			"events":    eventList,
@@ -158,7 +158,7 @@ func executePodEvents(ctx context.Context, clientset *kubernetes.Clientset, name
 		eventList = append(eventList, formatEvent(&e))
 	}
 
-	log.Printf("[Kubernetes] Listed %d events for pod %s/%s", len(eventList), namespace, pod)
+	logc.Infof(ctx, "[Kubernetes] Listed %d events for pod %s/%s", len(eventList), namespace, pod)
 
 	return newResult(map[string]any{
 		"events":    eventList,

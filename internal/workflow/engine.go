@@ -32,21 +32,16 @@ type EngineConfig struct {
 	RetryDelay         time.Duration `json:"retryDelay"`
 }
 
-// DefaultEngineConfig 默认引擎配置
-func DefaultEngineConfig() *EngineConfig {
-	return &EngineConfig{
-		MaxConcurrentNodes: 10,
-		DefaultTimeout:     30 * time.Second,
-		EnableRetry:        true,
-		MaxRetries:         3,
-		RetryDelay:         1 * time.Second,
-	}
-}
-
 // NewWorkflowEngine 创建新的工作流引擎
 func NewWorkflowEngine(config *EngineConfig, integrationRepo repos.IntegrationRepoInter, mcpRepo repos.MCPServerRepoInter, skillRepo repos.SkillRepoInter) *WorkflowEngine {
 	if config == nil {
-		config = DefaultEngineConfig()
+		config = &EngineConfig{
+			MaxConcurrentNodes: 10,
+			DefaultTimeout:     30 * time.Second,
+			EnableRetry:        true,
+			MaxRetries:         3,
+			RetryDelay:         1 * time.Second,
+		}
 	}
 
 	registry := BootstrapNodeRegistry(mcpRepo, skillRepo)

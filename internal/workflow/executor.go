@@ -2,19 +2,19 @@ package workflow
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"log"
-	"strings"
 	"sync"
 	"time"
 
 	"SREFlow/internal/models"
 	"SREFlow/internal/repos"
+
+	"github.com/zeromicro/go-zero/core/logc"
 )
 
-// WorkflowExecutor 工作流执行器 - 基于树结构的层级执行模型
-// 同级的多个节点必须全部完成执行后，才处理下一级节点
+// WorkflowExecutor 工作流执行器 - 基于"就绪"判定的逐步推进执行模型。
+// 从 Start 节点出发，按节点的前驱终态情况逐步推进：每个节点的下游不预先计算，
+// 而是在该节点执行完成后，依据其真实结果动态决定；未被任何前驱选中的节点标记为 skipped。
 type WorkflowExecutor struct {
 	registry        *NodeRegistry
 	config          *EngineConfig
@@ -45,9 +45,6 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, execution *models.Workfl
 		return err
 	}
 
-	// 计算所有节点的层级
-	levels := e.computeLevels(execGraph)
-
 	// 创建执行上下文
 	execCtx := &ExecutionContext{
 		Context:         ctx,
@@ -62,8 +59,8 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, execution *models.Workfl
 		IntegrationRepo: e.integrationRepo,
 	}
 
-	// 执行工作流（按层级）
-	return e.executeByLevels(execCtx, levels)
+	// 执行工作流（从 Start 节点开始逐步推进）
+	return e.execute(execCtx)
 }
 
 // ExecutionContext 执行上下文
@@ -95,7 +92,6 @@ type ExecutableNode struct {
 	Type    string
 	Config  map[string]any
 	Status  NodeStatus
-	Level   int // 节点层级，同级节点需全部完成后才执行下一级
 	Result  *models.NodeResult
 	Error   error
 	Retries int
@@ -113,9 +109,6 @@ const (
 	NodeStatusSkipped   NodeStatus = "skipped"
 	NodeStatusWarning   NodeStatus = "warning" // 完成但有警告
 )
-
-// LevelNodes 存储每层级的节点
-type LevelNodes map[int][]string
 
 // buildExecutionGraph 构建执行图
 func (e *WorkflowExecutor) buildExecutionGraph(topology *WorkflowTopology) (*ExecutionGraph, error) {
@@ -155,111 +148,218 @@ func (e *WorkflowExecutor) buildExecutionGraph(topology *WorkflowTopology) (*Exe
 			Type:   node.Type,
 			Config: node.Data,
 			Status: NodeStatusPending,
-			Level:  0,
 		}
 	}
 
 	return graph, nil
 }
 
-// computeLevels 计算所有节点的层级
-func (e *WorkflowExecutor) computeLevels(graph *ExecutionGraph) LevelNodes {
-	// 计算每个节点的入度
-	inDegree := make(map[string]int)
-	for nodeID := range graph.Nodes {
-		inDegree[nodeID] = 0
-	}
-	for target, sources := range graph.Incoming {
-		inDegree[target] = len(sources)
+// execute 从 Start 节点开始逐步推进执行工作流
+func (e *WorkflowExecutor) execute(ctx *ExecutionContext) error {
+	// 查找 Start 节点
+	startNodeID := e.findStartNode(ctx.Graph)
+	if startNodeID == "" {
+		return fmt.Errorf("no start node found in workflow")
 	}
 
-	// 初始化层级：入度为0的节点在第0层
-	levels := make(LevelNodes)
-	queue := []string{}
+	// 初始化执行状态
+	e.executionMutex.Lock()
+	ctx.Execution.Status = "running"
+	ctx.Execution.StartedAt = time.Now().Unix()
+	ctx.Execution.RunningNodes = []string{}
+	ctx.Execution.CompletedNodes = []string{}
+	ctx.Execution.FailedNodes = []string{}
+	ctx.Execution.NodeResults = make(map[string]*models.NodeResult)
+	e.executionMutex.Unlock()
 
-	// 找出所有根节点（入度为0）
-	for nodeID, degree := range inDegree {
-		if degree == 0 {
-			queue = append(queue, nodeID)
-			graph.Nodes[nodeID].Level = 0
-			levels[0] = append(levels[0], nodeID)
-		}
-	}
+	// 记录工作流开始
+	ctx.Monitor.EmitStreamWorkflowStarted(ctx.Execution.ID, ctx.Execution.WorkflowID, ctx.Execution.WorkflowName)
 
-	// BFS计算层级
-	for len(queue) > 0 {
-		current := queue[0]
-		queue = queue[1:]
-
-		currentNode := graph.Nodes[current]
-		currentLevel := currentNode.Level
-
-		// 遍历当前节点的所有出边
-		for _, targetID := range graph.Edges[current] {
-			targetNode := graph.Nodes[targetID]
-
-			// 更新目标节点的层级（取所有前置节点的最大层级+1）
-			newLevel := currentLevel + 1
-			if newLevel > targetNode.Level {
-				targetNode.Level = newLevel
-			}
-
-			// 更新入度并检查是否就绪
-			inDegree[targetID]--
-			if inDegree[targetID] == 0 {
-				queue = append(queue, targetID)
-				// 节点就绪，将其加入对应层级
-				levels[targetNode.Level] = append(levels[targetNode.Level], targetID)
-			}
-		}
-	}
-
-	return levels
+	// 从 Start 节点开始逐步遍历执行
+	selected := map[string]bool{startNodeID: true}
+	return e.traverse(ctx, selected)
 }
 
-// executeByLevels 按层级执行节点
-// 每一层内的所有节点并发执行，等待全部完成后才执行下一层
-func (e *WorkflowExecutor) executeByLevels(ctx *ExecutionContext, levels LevelNodes) error {
-	maxLevel := 0
-	for level := range levels {
-		if level > maxLevel {
-			maxLevel = level
+// findStartNode 查找工作流的 Start 节点（没有入边的节点）
+func (e *WorkflowExecutor) findStartNode(graph *ExecutionGraph) string {
+	for nodeID := range graph.Nodes {
+		// 没有入边的节点是 Start 节点
+		if len(graph.Incoming[nodeID]) == 0 {
+			return nodeID
 		}
 	}
+	return ""
+}
 
-	// 按层级顺序执行
-	for level := 0; level <= maxLevel; level++ {
-		nodeIDs, exists := levels[level]
-		if !exists || len(nodeIDs) == 0 {
+// traverse 从已选中的起始节点出发，基于"就绪"判定逐步推进工作流，直至无可推进节点。
+//
+//  1. 收集所有"就绪"节点（其全部前驱均已进入终态：completed/failed/skipped）；
+//  2. 就绪节点中，被上游选中的执行，未被任何前驱选中的标记为 skipped；
+//  3. 执行完成后，按节点真实结果计算其选中的下游节点并记入 selected，供后续轮次使用。
+//
+// 下游路径不预先计算，而是随执行结果逐步展开，因此能正确处理分支与汇聚：
+// 分支节点（Condition/SmartRouter）只把选中分支的下游记入 selected；
+// 汇聚节点（多前驱 join）必须等全部前驱终态后才就绪，且只要有任一前驱选中它即会执行，
+// 从而避免"未选中分支误伤共享下游"与"join 节点提前/重复执行"。
+func (e *WorkflowExecutor) traverse(ctx *ExecutionContext, selected map[string]bool) error {
+	for {
+		select {
+		case <-ctx.Context.Done():
+			return ctx.Context.Err()
+		default:
+		}
+
+		// 收集当前所有"就绪"的待执行节点
+		ready := e.collectReadyNodes(ctx)
+		if len(ready) == 0 {
+			return nil
+		}
+
+		// 将就绪节点划分为"应执行"与"应跳过"
+		var toExecute []string
+		for _, nodeID := range ready {
+			if selected[nodeID] {
+				toExecute = append(toExecute, nodeID)
+			} else {
+				e.markNodeSkipped(ctx, nodeID)
+			}
+		}
+
+		// 本轮仅产生跳过（无可执行节点）：跳过节点已进入终态，
+		// 继续下一轮以推进它们的下游。
+		if len(toExecute) == 0 {
 			continue
 		}
 
-		log.Printf("[Executor] Level %d: executing nodes %v\n", level, nodeIDs)
-
-		// 执行当前层级的所有节点（并发）
-		if err := e.executeLevel(ctx, nodeIDs); err != nil {
+		// 并发执行本轮选中的就绪节点
+		if err := e.executeBatch(ctx, toExecute); err != nil {
 			return err
 		}
 
-		// 等待当前层级所有节点完成
-		if err := e.waitLevelComplete(ctx, nodeIDs); err != nil {
-			// 如果是超时错误，停止执行
-			if strings.Contains(err.Error(), "timeout") {
-				return err
+		// 执行完成后，依据各节点真实结果计算其选中的下游节点
+		for _, nodeID := range toExecute {
+			for _, target := range e.resolveSelectedTargets(ctx, nodeID) {
+				selected[target] = true
 			}
 		}
-
-		// 检查已完成的节点是否有 Next 字段（SmartRouter 分支路由）
-		// 如果有，则跳过不在 Next 中的下游节点
-		e.skipNonSelectedBranches(ctx, nodeIDs, levels)
-
 	}
-
-	return nil
 }
 
-// executeLevel 并发执行某一层级的所有节点
-func (e *WorkflowExecutor) executeLevel(ctx *ExecutionContext, nodeIDs []string) error {
+// collectReadyNodes 收集所有"就绪"的待执行（Pending）节点：
+// 一个节点就绪当且仅当其全部前驱节点均已进入终态。
+func (e *WorkflowExecutor) collectReadyNodes(ctx *ExecutionContext) []string {
+	graph := ctx.Graph
+
+	graph.Mutex.RLock()
+	defer graph.Mutex.RUnlock()
+
+	var ready []string
+	for nodeID, node := range graph.Nodes {
+		node.Mutex.RLock()
+		status := node.Status
+		node.Mutex.RUnlock()
+
+		if status != NodeStatusPending {
+			continue
+		}
+
+		if e.allPredecessorsTerminal(graph, nodeID) {
+			ready = append(ready, nodeID)
+		}
+	}
+	return ready
+}
+
+// allPredecessorsTerminal 判断节点的所有前驱是否都已进入终态
+// （completed/failed/skipped），即不再处于 pending 或 running。
+// 调用方须持有 graph.Mutex 的读锁。
+func (e *WorkflowExecutor) allPredecessorsTerminal(graph *ExecutionGraph, nodeID string) bool {
+	for _, predID := range graph.Incoming[nodeID] {
+		pred := graph.Nodes[predID]
+		if pred == nil {
+			continue
+		}
+		pred.Mutex.RLock()
+		status := pred.Status
+		pred.Mutex.RUnlock()
+		if status == NodeStatusPending || status == NodeStatusRunning {
+			return false
+		}
+	}
+	return true
+}
+
+// resolveSelectedTargets 根据节点的真实执行结果，计算它选中的下游节点：
+//   - 节点执行成功时，以 result.Next 为准。注意 executeNode 已为普通节点
+//     自动填充 result.Next 为全部出边；而带分支路由的节点（Condition/SmartRouter）
+//     会自行设置 result.Next。因此空的 result.Next 表示"不路由到任何下游"
+//     （例如 Condition 命中的分支没有连接下游节点），不能再回退到全部出边。
+//   - 仅当节点没有任何结果（如执行失败，result == nil）时，才默认走全部出边，
+//     以便下游节点可以处理上游错误。
+func (e *WorkflowExecutor) resolveSelectedTargets(ctx *ExecutionContext, nodeID string) []string {
+	graph := ctx.Graph
+
+	graph.Mutex.RLock()
+	node := graph.Nodes[nodeID]
+	allOutgoing := make([]string, len(graph.Edges[nodeID]))
+	copy(allOutgoing, graph.Edges[nodeID])
+	graph.Mutex.RUnlock()
+
+	if node == nil || len(allOutgoing) == 0 {
+		return nil
+	}
+
+	node.Mutex.RLock()
+	result := node.Result
+	node.Mutex.RUnlock()
+
+	if result != nil {
+		// 成功执行：result.Next 已是权威路由结果（普通节点已自动填充全部出边，
+		// 分支节点已设置具体分支；为空则表示不路由到任何下游）。
+		return result.Next
+	}
+
+	// 无结果（执行失败）：默认走全部出边，让下游有机会处理错误。
+	return allOutgoing
+}
+
+// markNodeSkipped 将单个节点标记为 Skipped（仅处理 Pending 状态的节点）。
+// 注意：此处只跳过该节点本身，不递归跳过其后代——后代是否跳过将在它们
+// 自身就绪时根据"是否被选中"独立判定，从而正确处理共享下游的 join 节点。
+func (e *WorkflowExecutor) markNodeSkipped(ctx *ExecutionContext, nodeID string) {
+	graph := ctx.Graph
+
+	graph.Mutex.RLock()
+	node := graph.Nodes[nodeID]
+	graph.Mutex.RUnlock()
+
+	if node == nil {
+		return
+	}
+
+	node.Mutex.Lock()
+	if node.Status != NodeStatusPending {
+		node.Mutex.Unlock()
+		return // 已经在执行中或已完成，不覆盖状态
+	}
+	node.Status = NodeStatusSkipped
+	nodeType := node.Type
+	node.Mutex.Unlock()
+
+	e.executionMutex.Lock()
+	ctx.Execution.CompletedNodes = append(ctx.Execution.CompletedNodes, nodeID)
+	e.executionMutex.Unlock()
+
+	logc.Infof(ctx.Context, "[Workflow] Node %s skipped (branch not selected)", nodeID)
+
+	if ctx.StateManager != nil {
+		ctx.StateManager.SetNodeState(ctx.Execution.ID, nodeID, nodeType, NodeStateSkipped, nil, "branch not selected")
+	}
+	ctx.Monitor.EmitStreamNodeSkipped(ctx.Execution.ID, ctx.Execution.WorkflowID, ctx.Execution.WorkflowName, nodeID, nodeType)
+}
+
+// executeBatch 并发执行一批节点
+func (e *WorkflowExecutor) executeBatch(ctx *ExecutionContext, nodeIDs []string) error {
 	semaphore := make(chan struct{}, ctx.Config.MaxConcurrentNodes)
 	var wg sync.WaitGroup
 	errorChan := make(chan error, len(nodeIDs))
@@ -268,9 +368,8 @@ func (e *WorkflowExecutor) executeLevel(ctx *ExecutionContext, nodeIDs []string)
 		select {
 		case <-ctx.Context.Done():
 			return ctx.Context.Err()
-		case <-errorChan:
-			// 遇到错误继续执行其他节点
-		case semaphore <- struct{}{}:
+		default:
+			semaphore <- struct{}{}
 			wg.Add(1)
 			go func(nid string) {
 				defer func() {
@@ -290,168 +389,14 @@ func (e *WorkflowExecutor) executeLevel(ctx *ExecutionContext, nodeIDs []string)
 
 	wg.Wait()
 
-	// 检查是否有失败（但不返回错误，让工作流继续）
+	// 检查是否有错误（但不中断工作流）
 	select {
 	case err := <-errorChan:
-		log.Printf("[Execute] err: %s", err)
+		logc.Errorf(ctx.Context, "[Execute] batch error: %s", err)
 	default:
 	}
+
 	return nil
-}
-
-// waitLevelComplete 等待某一层级的所有节点执行完成
-func (e *WorkflowExecutor) waitLevelComplete(ctx *ExecutionContext, nodeIDs []string) error {
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-	timeout := time.After(10 * time.Minute) // 10分钟超时
-
-	for {
-		select {
-		case <-ctx.Context.Done():
-			return ctx.Context.Err()
-		case <-timeout:
-			return fmt.Errorf("level execution timeout")
-		case <-ticker.C:
-			allComplete := true
-			hasFailure := false
-			for _, nodeID := range nodeIDs {
-				ctx.Graph.Mutex.RLock()
-				node := ctx.Graph.Nodes[nodeID]
-				ctx.Graph.Mutex.RUnlock()
-
-				if node != nil {
-					node.Mutex.RLock()
-					status := node.Status
-					node.Mutex.RUnlock()
-
-					if status != NodeStatusCompleted && status != NodeStatusFailed && status != NodeStatusSkipped && status != NodeStatusWarning {
-						allComplete = false
-						break
-					}
-					if status == NodeStatusFailed {
-						hasFailure = true
-					}
-				}
-			}
-
-			if allComplete {
-				if hasFailure {
-					return fmt.Errorf("level has failed nodes")
-				}
-				return nil
-			}
-		}
-	}
-}
-
-// skipNonSelectedBranches checks completed nodes for Next field (SmartRouter branch routing).
-// Downstream nodes not in Next are marked as skipped.
-func (e *WorkflowExecutor) skipNonSelectedBranches(ctx *ExecutionContext, completedNodeIDs []string, levels LevelNodes) {
-	for _, nodeID := range completedNodeIDs {
-		ctx.Graph.Mutex.RLock()
-		node := ctx.Graph.Nodes[nodeID]
-		ctx.Graph.Mutex.RUnlock()
-
-		if node == nil {
-			continue
-		}
-
-		node.Mutex.RLock()
-		result := node.Result
-		node.Mutex.RUnlock()
-
-		if result == nil || len(result.Next) == 0 {
-			continue
-		}
-
-		nextSet := make(map[string]bool)
-		for _, n := range result.Next {
-			nextSet[n] = true
-		}
-
-		ctx.Graph.Mutex.RLock()
-		allTargets := ctx.Graph.Edges[nodeID]
-		ctx.Graph.Mutex.RUnlock()
-
-		for _, targetID := range allTargets {
-			if nextSet[targetID] {
-				continue
-			}
-
-			ctx.Graph.Mutex.RLock()
-			targetNode := ctx.Graph.Nodes[targetID]
-			ctx.Graph.Mutex.RUnlock()
-
-			if targetNode == nil {
-				continue
-			}
-
-			targetNode.Mutex.Lock()
-			if targetNode.Status == NodeStatusPending {
-				targetNode.Status = NodeStatusSkipped
-				targetNode.Result = &models.NodeResult{Outputs: map[string]any{}}
-				log.Printf("[Executor] Skipping node %s (not in Next of %s)", targetID, nodeID)
-				targetNode.Mutex.Unlock()
-
-				e.executionMutex.Lock()
-				ctx.Execution.CompletedNodes = append(ctx.Execution.CompletedNodes, targetID)
-				ctx.Execution.NodeResults[targetID] = &models.NodeResult{
-					Outputs: map[string]any{"skipped": true, "reason": "not selected by upstream router"},
-				}
-				e.executionMutex.Unlock()
-
-				ctx.Monitor.EmitStreamNodeSkipped(ctx.Execution.ID, ctx.Execution.WorkflowID, ctx.Execution.WorkflowName, targetID, targetNode.Type)
-				if ctx.StateManager != nil {
-					ctx.StateManager.SetNodeState(ctx.Execution.ID, targetID, targetNode.Type, NodeStateSkipped, nil, "not selected by upstream router")
-				}
-
-				e.skipDownstream(ctx, targetID)
-			} else {
-				targetNode.Mutex.Unlock()
-			}
-		}
-	}
-}
-
-// skipDownstream recursively skips all downstream nodes of a skipped node
-func (e *WorkflowExecutor) skipDownstream(ctx *ExecutionContext, sourceID string) {
-	ctx.Graph.Mutex.RLock()
-	targets := ctx.Graph.Edges[sourceID]
-	ctx.Graph.Mutex.RUnlock()
-
-	for _, targetID := range targets {
-		ctx.Graph.Mutex.RLock()
-		targetNode := ctx.Graph.Nodes[targetID]
-		ctx.Graph.Mutex.RUnlock()
-
-		if targetNode == nil {
-			continue
-		}
-
-		targetNode.Mutex.Lock()
-		if targetNode.Status == NodeStatusPending {
-			targetNode.Status = NodeStatusSkipped
-			targetNode.Result = &models.NodeResult{Outputs: map[string]any{}}
-			log.Printf("[Executor] Skipping downstream node %s (parent %s was skipped)", targetID, sourceID)
-			targetNode.Mutex.Unlock()
-
-			e.executionMutex.Lock()
-			ctx.Execution.CompletedNodes = append(ctx.Execution.CompletedNodes, targetID)
-			ctx.Execution.NodeResults[targetID] = &models.NodeResult{
-				Outputs: map[string]any{"skipped": true, "reason": "upstream node was skipped"},
-			}
-			e.executionMutex.Unlock()
-
-			ctx.Monitor.EmitStreamNodeSkipped(ctx.Execution.ID, ctx.Execution.WorkflowID, ctx.Execution.WorkflowName, targetID, targetNode.Type)
-			if ctx.StateManager != nil {
-				ctx.StateManager.SetNodeState(ctx.Execution.ID, targetID, targetNode.Type, NodeStateSkipped, nil, "upstream node was skipped")
-			}
-
-			e.skipDownstream(ctx, targetID)
-		} else {
-			targetNode.Mutex.Unlock()
-		}
-	}
 }
 
 // executeNode 执行单个节点
@@ -497,6 +442,19 @@ func (e *WorkflowExecutor) executeNode(ctx *ExecutionContext, nodeID string) err
 	node.Result = result
 	node.Error = err
 
+	// 节点执行完成后，根据连接线自动填充 Next 字段（仅当节点未设置 Next 且没有 HandleEdges 时）
+	graph := ctx.Graph
+	graph.Mutex.RLock()
+	hasHandleEdges := len(graph.HandleEdges[nodeID]) > 0
+	outgoingEdges := graph.Edges[nodeID]
+	graph.Mutex.RUnlock()
+
+	// 只有当节点没有 HandleEdges（自定义路由逻辑）且没有设置 Next 时，才自动填充
+	if !hasHandleEdges && len(outgoingEdges) > 0 && result != nil && len(result.Next) == 0 {
+		result.Next = outgoingEdges
+		node.Result = result
+	}
+
 	var resultModel *models.NodeResult
 	var hasError bool
 	if err != nil {
@@ -510,8 +468,16 @@ func (e *WorkflowExecutor) executeNode(ctx *ExecutionContext, nodeID string) err
 	// 需要在节点锁内更新执行状态，避免并发写入问题
 	if hasError {
 		node.Status = NodeStatusFailed
+		// 将错误信息写入 Outputs["error"]，让下游节点可通过 {{nodeID.error}} 引用
+		outputs := map[string]any{"error": err.Error()}
+		if result != nil && result.Outputs != nil {
+			for k, v := range result.Outputs {
+				outputs[k] = v
+			}
+			outputs["error"] = err.Error() // 确保 error 不被覆盖
+		}
 		resultModel = &models.NodeResult{
-			Outputs: map[string]any{},
+			Outputs: outputs,
 			Error:   err.Error(),
 		}
 	} else {
@@ -605,47 +571,31 @@ func (e *WorkflowExecutor) prepareNodeContext(ctx *ExecutionContext, nodeID stri
 
 	input := make(map[string]any)
 
-	// 从前置节点收集输出
-	ctx.Graph.Mutex.RLock()
-	incomingNodes := ctx.Graph.Incoming[nodeID]
-	ctx.Graph.Mutex.RUnlock()
-
-	for _, sourceID := range incomingNodes {
-		ctx.Graph.Mutex.RLock()
-		sourceNode := ctx.Graph.Nodes[sourceID]
-		ctx.Graph.Mutex.RUnlock()
-
-		if sourceNode != nil {
-			sourceNode.Mutex.RLock()
-			if sourceNode.Result != nil {
-				for portName, value := range sourceNode.Result.Outputs {
-					// 使用节点ID作为前缀，避免不同节点的相同输出键冲突
-					inputKey := sourceID + "." + portName
-					input[inputKey] = value
-					// 同时保留原始键名（如果不存在的话）
-					if _, exists := input[portName]; !exists {
-						input[portName] = value
-					}
-				}
+	// 从 ctx.Execution.NodeResults 收集所有已执行节点的输出
+	// NodeResults 包含所有已执行节点的结果，不仅限于直接前驱
+	for ancestorID, nodeResult := range ctx.Execution.NodeResults {
+		if ancestorID == nodeID || nodeResult == nil {
+			continue
+		}
+		for portName, value := range nodeResult.Outputs {
+			// 使用节点ID作为前缀，避免不同节点的相同输出键冲突
+			inputKey := ancestorID + "." + portName
+			input[inputKey] = value
+			// 同时保留原始键名（如果不存在的话）
+			if _, exists := input[portName]; !exists {
+				input[portName] = value
 			}
-			sourceNode.Mutex.RUnlock()
 		}
 	}
 
 	// 创建变量解析器
-	resolver := NewVariableResolver(ctx.Execution.NodeResults, ctx.Execution.Variables)
+	resolver := NewVariableResolver(ctx.Context, ctx.Execution.NodeResults, ctx.Execution.Variables)
 
-	// 解析输入中的变量引用
-	resolvedInput, err := resolver.ResolveVariablesInMap(input)
-	if err != nil {
-		resolvedInput = input
-	}
+	// 解析输入中的变量引用（单个字段解析失败不影响其他字段）
+	resolvedInput, _ := resolver.ResolveVariablesInMap(input)
 
-	// 解析配置中的变量引用
-	resolvedConfig, err := resolver.ResolveVariablesInMap(node.Config)
-	if err != nil {
-		resolvedConfig = node.Config
-	}
+	// 解析配置中的变量引用（单个字段解析失败不影响其他字段）
+	resolvedConfig, _ := resolver.ResolveVariablesInMap(node.Config)
 
 	// 从 integration 合并配置
 	resolvedConfig = e.mergeIntegrationConfig(ctx, node, resolvedConfig)
@@ -669,236 +619,7 @@ func (e *WorkflowExecutor) prepareNodeContext(ctx *ExecutionContext, nodeID stri
 	}
 }
 
-// mergeIntegrationConfig 从 integration 合并配置到节点配置
-func (e *WorkflowExecutor) mergeIntegrationConfig(ctx *ExecutionContext, node *ExecutableNode, config map[string]any) map[string]any {
-	// 如果没有 integration repo，直接返回原配置
-	if e.integrationRepo == nil {
-		return config
-	}
-
-	// 自动按类型解析 integration（同一 workspace 中同类型 integration 唯一）
-	integrationType := e.nodeTypeToIntegrationType(node.Type)
-	if integrationType == "" {
-		return config
-	}
-	integrations, err := e.integrationRepo.GetByWorkspaceIDAndType(ctx.WorkspaceID, integrationType)
-	if err != nil || len(integrations) == 0 {
-		return config
-	}
-	integration := integrations[0]
-
-	// 根据 integration 类型合并配置
-	switch integration.Type {
-	case models.IntegrationTypeLLM:
-		config = e.mergeAIConfig(config, integration)
-	case models.IntegrationTypePrometheus:
-		config = e.mergePrometheusConfig(config, integration)
-	case models.IntegrationTypeSSHAuth:
-		config = e.mergeSSHAuth(config, integration)
-	case models.IntegrationTypeKubernetes:
-		config = e.mergeKubeConfig(config, integration)
-	default:
-		// 其他 HTTP 类型的数据源
-		if integration.Type.IsHTTPType() {
-			config = e.mergeHTTPConfig(config, integration, node.Type)
-		}
-	}
-
-	return config
-}
-
-// mergeAIConfig 合并 AI integration 配置
-func (e *WorkflowExecutor) mergeAIConfig(config map[string]any, integration *models.Integration) map[string]any {
-	if integration.AIConfig == "" {
-		return config
-	}
-
-	var aiConfig models.AIConfig
-	if err := json.Unmarshal([]byte(integration.AIConfig), &aiConfig); err != nil {
-		return config
-	}
-
-	// 数据源配置优先于节点配置
-	if aiConfig.APIKey != "" {
-		config["apiKey"] = aiConfig.APIKey
-	}
-	if aiConfig.BaseURL != "" {
-		config["baseURL"] = aiConfig.BaseURL
-	} else if aiConfig.API != "" {
-		config["baseURL"] = aiConfig.API
-	}
-
-	return config
-}
-
-// mergePrometheusConfig 合并 Prometheus integration 配置
-func (e *WorkflowExecutor) mergePrometheusConfig(config map[string]any, integration *models.Integration) map[string]any {
-	if integration.HTTPConfig == "" {
-		return config
-	}
-
-	var httpConfig models.HTTPConfig
-	if err := json.Unmarshal([]byte(integration.HTTPConfig), &httpConfig); err != nil {
-		return config
-	}
-
-	if httpConfig.Endpoint != "" {
-		config["prometheusUrl"] = httpConfig.Endpoint
-	}
-
-	// 合并认证配置
-	config = e.mergeHTTPAuth(config, httpConfig.Auth)
-
-	return config
-}
-
-// mergeHTTPConfig 合并通用 HTTP integration 配置
-func (e *WorkflowExecutor) mergeHTTPConfig(config map[string]any, integration *models.Integration, nodeType string) map[string]any {
-	if integration.HTTPConfig == "" {
-		return config
-	}
-
-	var httpConfig models.HTTPConfig
-	if err := json.Unmarshal([]byte(integration.HTTPConfig), &httpConfig); err != nil {
-		return config
-	}
-
-	// 根据节点类型设置 URL 配置
-	switch nodeType {
-	case "prometheus":
-		if httpConfig.Endpoint != "" {
-			config["prometheusUrl"] = httpConfig.Endpoint
-		}
-	case "jaeger":
-		if httpConfig.Endpoint != "" {
-			config["jaegerUrl"] = httpConfig.Endpoint
-		}
-	case "clickhouse":
-		if httpConfig.Endpoint != "" {
-			config["clickhouseUrl"] = httpConfig.Endpoint
-		}
-	case "elasticsearch":
-		if httpConfig.Endpoint != "" {
-			config["elasticsearchUrl"] = httpConfig.Endpoint
-		}
-	case "loki":
-		if httpConfig.Endpoint != "" {
-			config["lokiUrl"] = httpConfig.Endpoint
-		}
-	}
-
-	// 合并认证配置
-	config = e.mergeHTTPAuth(config, httpConfig.Auth)
-
-	return config
-}
-
-// mergeHTTPAuth 合并 HTTP 认证配置
-func (e *WorkflowExecutor) mergeHTTPAuth(config map[string]any, auth models.IntegrationAuth) map[string]any {
-	switch auth.Type {
-	case models.AuthTypeBearer:
-		if auth.Token != "" {
-			config["authToken"] = auth.Token
-		}
-	case models.AuthTypeBasic:
-		if auth.Username != "" {
-			config["authUsername"] = auth.Username
-		}
-		if auth.Password != "" {
-			config["authPassword"] = auth.Password
-		}
-	case models.AuthTypeAPIKey:
-		if auth.APIKey != "" {
-			config["authAPIKey"] = auth.APIKey
-			config["authAPIKeyName"] = auth.APIKeyName
-			config["authAPIKeyIn"] = auth.APIKeyIn
-		}
-	}
-	return config
-}
-
-func (e *WorkflowExecutor) mergeSSHAuth(config map[string]any, integration *models.Integration) map[string]any {
-	if integration.HTTPConfig == "" {
-		return config
-	}
-
-	var httpConfig models.HTTPConfig
-	if err := json.Unmarshal([]byte(integration.HTTPConfig), &httpConfig); err != nil {
-		return config
-	}
-
-	auth := httpConfig.Auth
-
-	// 合并认证类型
-	if auth.Type != "" {
-		config["authType"] = string(auth.Type)
-	}
-
-	// 合并用户名
-	if auth.Username != "" {
-		config["authUsername"] = auth.Username
-	}
-
-	// 合并密码
-	if auth.Password != "" {
-		config["authPassword"] = auth.Password
-	}
-	// 合并私钥
-	if auth.PrivateKey != "" {
-		config["authPrivateKey"] = auth.PrivateKey
-	}
-
-	return config
-}
-
-// mergeKubeConfig 合并 Kubernetes integration 配置
-func (e *WorkflowExecutor) mergeKubeConfig(config map[string]any, integration *models.Integration) map[string]any {
-	if integration.KubeConfig == "" {
-		return config
-	}
-
-	var kubeConfig models.KubeConfig
-	if err := json.Unmarshal([]byte(integration.KubeConfig), &kubeConfig); err != nil {
-		return config
-	}
-
-	if kubeConfig.Kubeconfig != "" {
-		config["kubeconfig"] = kubeConfig.Kubeconfig
-	}
-
-	return config
-}
-
-// executeSingleNode 执行单个节点
-
-// nodeTypeToIntegrationType 将工作流节点类型映射到 Integration 类型
-func (e *WorkflowExecutor) nodeTypeToIntegrationType(nodeType string) models.IntegrationType {
-	switch nodeType {
-	case "LLM":
-		return models.IntegrationTypeLLM
-	case "Prometheus":
-		return models.IntegrationTypePrometheus
-	case "Jaeger":
-		return models.IntegrationTypeJaeger
-	case "Elasticsearch":
-		return models.IntegrationTypeElasticsearch
-	case "Loki":
-		return models.IntegrationTypeLoki
-	case "ClickHouse":
-		return models.IntegrationTypeClickhouse
-	case "SmartRouter":
-		return models.IntegrationTypeLLM
-	case "Agent":
-		return models.IntegrationTypeLLM
-	case "SSH":
-		return models.IntegrationTypeSSHAuth
-	case "Kubernetes":
-		return models.IntegrationTypeKubernetes
-	default:
-		return ""
-	}
-}
-
+// executeSingleNode 通过节点注册表查找对应执行器并在带超时的上下文中执行该节点
 func (e *WorkflowExecutor) executeSingleNode(ctx *ExecutionContext, nodeCtx *models.NodeContext) (*models.NodeResult, error) {
 	executor, exists := ctx.Registry.GetExecutor(nodeCtx.NodeType)
 	if !exists {

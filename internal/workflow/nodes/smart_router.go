@@ -6,12 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"SREFlow/internal/models"
+
+	"github.com/zeromicro/go-zero/core/logc"
 )
 
 // SmartRouterExecutor 智能路由执行器
@@ -108,7 +109,15 @@ func (e *SmartRouterExecutor) Execute(ctx context.Context, nodeCtx *models.NodeC
 	}
 
 	// 收集上游输入
-	inputStr := collectInputString(nodeCtx.Input)
+	// 优先使用配置的 input 字段（支持变量引用，如 {{prometheus_1.series}}）
+	// 如果未配置，则使用所有上游节点的输出
+	configuredInput := getStr(nodeCtx.Config, "input", "")
+	var inputStr string
+	if configuredInput != "" {
+		inputStr = configuredInput
+	} else {
+		inputStr = collectInputString(nodeCtx.Input)
+	}
 
 	// 构建 system prompt
 	systemPrompt := buildRouterSystemPrompt(branches)
@@ -137,7 +146,7 @@ func (e *SmartRouterExecutor) Execute(ctx context.Context, nodeCtx *models.NodeC
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	log.Printf("[SmartRouter] Model: %s, Branches: %d", modelID, len(branches))
+	logc.Infof(ctx, "[SmartRouter] Model: %s, Branches: %d", modelID, len(branches))
 
 	// 发送请求
 	httpCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
@@ -178,7 +187,7 @@ func (e *SmartRouterExecutor) Execute(ctx context.Context, nodeCtx *models.NodeC
 
 	// 解析 LLM 返回的 JSON
 	content := llmResp.Choices[0].Message.Content
-	log.Printf("[SmartRouter] LLM response (%.2fs): %s", latency, truncateLog(content, 300))
+	logc.Infof(ctx, "[SmartRouter] LLM response (%.2fs): %s", latency, truncateLog(content, 300))
 
 	var routerResult SmartRouterResult
 	if err := json.Unmarshal([]byte(content), &routerResult); err != nil {
@@ -213,10 +222,9 @@ func (e *SmartRouterExecutor) Execute(ctx context.Context, nodeCtx *models.NodeC
 		routerResult.Reasoning = fmt.Sprintf("LLM selected invalid branch '%s', fell back to first branch. %s", routerResult.SelectedBranch, routerResult.Reasoning)
 	}
 
-	log.Printf("[SmartRouter] Selected: %s, Confidence: %.2f", routerResult.SelectedBranch, routerResult.Confidence)
+	logc.Infof(ctx, "[SmartRouter] Selected: %s, Confidence: %.2f", routerResult.SelectedBranch, routerResult.Confidence)
 
 	result := map[string]any{
-		"output":         routerResult.SelectedBranch,
 		"selectedBranch": routerResult.SelectedBranch,
 		"confidence":     routerResult.Confidence,
 		"reasoning":      routerResult.Reasoning,
@@ -237,7 +245,7 @@ func (e *SmartRouterExecutor) Execute(ctx context.Context, nodeCtx *models.NodeC
 	if nodeCtx.HandleEdges != nil {
 		if targetNodeID, ok := nodeCtx.HandleEdges[routerResult.SelectedBranch]; ok {
 			nodeResult.Next = []string{targetNodeID}
-			log.Printf("[SmartRouter] Routing to branch '%s' -> node %s", routerResult.SelectedBranch, targetNodeID)
+			logc.Infof(ctx, "[SmartRouter] Routing to branch '%s' -> node %s", routerResult.SelectedBranch, targetNodeID)
 		}
 	}
 
