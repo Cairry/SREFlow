@@ -3,16 +3,21 @@ module SREFlow
 go 1.26.0
 
 require (
+	github.com/cloudwego/eino v0.9.5
+	github.com/cloudwego/eino-ext/components/model/openai v0.1.13
+	github.com/eino-contrib/jsonschema v1.0.3
 	github.com/gin-gonic/gin v1.10.1
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/mark3labs/mcp-go v0.54.0
+	github.com/nicksnyder/go-i18n/v2 v2.6.1
 	github.com/rs/xid v1.6.0
 	github.com/spf13/viper v1.20.1
 	github.com/traefik/yaegi v0.16.1
 	github.com/zeromicro/go-zero v1.8.4
 	golang.org/x/crypto v0.51.0
+	golang.org/x/text v0.37.0
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/gorm v1.30.0
 	k8s.io/apimachinery v0.29.4
@@ -27,12 +32,9 @@ require (
 	github.com/bytedance/sonic v1.15.0 // indirect
 	github.com/bytedance/sonic/loader v0.5.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
-	github.com/cloudwego/eino v0.9.5 // indirect
-	github.com/cloudwego/eino-ext/components/model/openai v0.1.13 // indirect
 	github.com/cloudwego/eino-ext/libs/acl/openai v0.1.17 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/eino-contrib/jsonschema v1.0.3 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
 	github.com/fatih/color v1.18.0 // indirect
@@ -73,7 +75,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nikolalohinski/gonja v1.5.3 // indirect
-	github.com/onsi/ginkgo v1.16.5 // indirect
+	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/onsi/ginkgo/v2 v2.23.3 // indirect
 	github.com/onsi/gomega v1.37.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
@@ -105,7 +107,6 @@ require (
 	golang.org/x/oauth2 v0.24.0 // indirect
 	golang.org/x/sys v0.44.0 // indirect
 	golang.org/x/term v0.43.0 // indirect
-	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/time v0.10.0 // indirect
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect

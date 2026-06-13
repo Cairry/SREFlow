@@ -25,13 +25,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { workspaceApi, Workspace } from "@/lib/api/workspace";
+import { useI18n } from "@/i18n";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
-const navigation = [
-  { name: "Workflows", href: "/workflows", icon: Workflow },
-  { name: "Integrations", href: "/integrations", icon: Database },
-  { name: "MCP Tools", href: "/mcp-tools", icon: Puzzle },
-  { name: "Skills", href: "/skills", icon: BookOpen },
-  { name: "Help", href: "/help", icon: HelpCircle },
+const navigationItems = [
+  { nameKey: "navigation.workflows", href: "/workflows", icon: Workflow },
+  { nameKey: "navigation.integrations", href: "/integrations", icon: Database },
+  { nameKey: "navigation.mcpTools", href: "/mcp-tools", icon: Puzzle },
+  { nameKey: "navigation.skills", href: "/skills", icon: BookOpen },
+  { nameKey: "navigation.help", href: "/help", icon: HelpCircle },
 ];
 
 const WORKSPACE_STORAGE_KEY = "flowforge-current-workspace-id";
@@ -40,6 +42,7 @@ export function Navigation() {
   const pathname = usePathname();
   const router = useRouter();
   const { resolvedTheme, setTheme } = useTheme();
+  const { t } = useI18n();
   const [mounted, setMounted] = useState(false);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string>("");
@@ -207,18 +210,18 @@ export function Navigation() {
                 <div className="h-5 w-px bg-workflow-border" />
 
                 <div className="flex space-x-1">
-                  {navigation.map((item) => {
+                  {navigationItems.map((item) => {
                     const isActive = pathname === item.href;
                     return (
                       <Button
-                        key={item.name}
+                        key={item.nameKey}
                         variant={isActive ? "default" : "ghost"}
                         asChild
                         className="flex items-center space-x-2"
                       >
                         <Link href={item.href}>
                           <item.icon className="h-4 w-4" />
-                          <span>{item.name}</span>
+                          <span>{t(item.nameKey)}</span>
                         </Link>
                       </Button>
                     );
@@ -242,12 +245,12 @@ export function Navigation() {
                     className="gap-2"
                   >
                     <Plus className="h-4 w-4" />
-                    Create First Workspace
+                    {t("workspace.createFirst")}
                   </Button>
                 ) : (
                   <Select value={currentWorkspaceId} onValueChange={handleWorkspaceChange}>
                     <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Select workspace" />
+                      <SelectValue placeholder={t("workspace.selectPlaceholder")} />
                     </SelectTrigger>
                     <SelectContent>
                       {workspaces.map((workspace) => (
@@ -262,7 +265,7 @@ export function Navigation() {
                         onClick={() => setShowManageWorkspacesDialog(true)}
                       >
                         <LayoutGrid className="h-4 w-4" />
-                        Manage Workspaces
+                        {t("workspace.manage")}
                       </Button>
                     </SelectContent>
                   </Select>
@@ -270,6 +273,7 @@ export function Navigation() {
               </div>
             )}
 
+            <LanguageSwitcher />
             <ThemeToggle />
           </div>
         </div>
@@ -279,27 +283,27 @@ export function Navigation() {
       <Dialog open={showCreateWorkspaceDialog} onOpenChange={setShowCreateWorkspaceDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create New Workspace</DialogTitle>
+            <DialogTitle>{t("workspace.create")}</DialogTitle>
             <DialogDescription>
-              Create a workspace to organize your workflows and data sources.
+              {t("workspace.createDescription")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
             <div className="space-y-2">
-              <label className="block text-sm font-medium mb-1">Workspace Name *</label>
+              <label className="block text-sm font-medium mb-1">{t("workspace.name")} *</label>
               <Input
                 value={newWorkspaceName}
                 onChange={(e) => setNewWorkspaceName(e.target.value)}
-                placeholder="My Workspace"
+                placeholder={t("workspace.namePlaceholder")}
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreateWorkspaceDialog(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button onClick={handleCreateWorkspace} disabled={!newWorkspaceName.trim()}>
-              Create Workspace
+              {t("workspace.create")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -309,14 +313,14 @@ export function Navigation() {
       <Dialog open={showManageWorkspacesDialog} onOpenChange={setShowManageWorkspacesDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Manage Workspaces</DialogTitle>
+            <DialogTitle>{t("workspace.manage")}</DialogTitle>
             <DialogDescription>
-              View and delete workspaces. Deleting a workspace will also delete all associated workflows and integrations.
+              {t("workspace.deleteConfirm", { name: '' })}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-4 max-h-[300px] overflow-y-auto">
             {workspaces.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">No workspaces found</p>
+              <p className="text-sm text-muted-foreground text-center py-4">{t("workspace.noWorkspaces")}</p>
             ) : (
               workspaces.map((workspace) => (
                 <div
@@ -358,7 +362,7 @@ export function Navigation() {
                         <p className="font-medium text-workflow-text">
                           {workspace.name}
                           {workspace.id === currentWorkspaceId && (
-                            <span className="ml-2 text-xs text-primary">(current)</span>
+                            <span className="ml-2 text-xs text-primary">({t("workspace.current")})</span>
                           )}
                         </p>
                         <p className="text-xs text-workflow-text-muted">ID: {workspace.id}</p>
@@ -391,11 +395,11 @@ export function Navigation() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowManageWorkspacesDialog(false)}>
-              Close
+              {t("common.close")}
             </Button>
             <Button onClick={() => { setShowManageWorkspacesDialog(false); setShowCreateWorkspaceDialog(true); }}>
               <Plus className="h-4 w-4 mr-1" />
-              New Workspace
+              {t("workspace.newWorkspace")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -405,24 +409,22 @@ export function Navigation() {
       <Dialog open={showDeleteWorkspaceDialog} onOpenChange={setShowDeleteWorkspaceDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirm Delete Workspace</DialogTitle>
+            <DialogTitle>{t("workspace.delete")}</DialogTitle>
             <DialogDescription asChild>
               <>
-                Are you sure you want to delete workspace{" "}
-                <span className="font-semibold text-workflow-text">{deletingWorkspace?.name}</span>?
-                All workflows and integrations in this workspace will be deleted. This action cannot be undone.
+                {t("workspace.deleteConfirm", { name: deletingWorkspace?.name || '' })}
               </>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDeleteWorkspaceDialog(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
               onClick={handleConfirmDeleteWorkspace}
             >
-              Delete
+              {t("common.delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

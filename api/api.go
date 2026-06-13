@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"SREFlow/internal/i18n"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -20,6 +22,8 @@ func (e *APIError) Error() string {
 
 func Service(ctx *gin.Context, fu func() (interface{}, error)) {
 	data, err := fu()
+	lang := i18n.GetLanguageFromContext(ctx)
+
 	if err != nil {
 		if apiErr, ok := err.(*APIError); ok {
 			Error(ctx, apiErr.Code, apiErr.Message)
@@ -28,39 +32,53 @@ func Service(ctx *gin.Context, fu func() (interface{}, error)) {
 		}
 		return
 	}
-	Success(ctx, data, "success")
+	Success(ctx, data, i18n.TWithLang(lang, "common.success"))
 }
 
 func BindJson(ctx *gin.Context, req interface{}) error {
+	lang := i18n.GetLanguageFromContext(ctx)
+
 	err := ctx.ShouldBindJSON(&req)
 	if err != nil {
-		return fmt.Errorf("[Body] 请求参数错误, %s", err.Error())
+		return fmt.Errorf(i18n.TWithLang(lang, "error.invalidParams", map[string]interface{}{"error": err.Error()}))
 	}
 
 	return nil
 }
 
 func BindQuery(ctx *gin.Context, req interface{}) error {
+	lang := i18n.GetLanguageFromContext(ctx)
+
 	err := ctx.ShouldBindQuery(req)
 	if err != nil {
-		return fmt.Errorf("[Query] 请求参数错误, %s", err.Error())
+		return fmt.Errorf(i18n.TWithLang(lang, "error.invalidParams", map[string]interface{}{"error": err.Error()}))
 	}
 
 	return nil
 }
 
 var CodeInfo = map[int64]string{
-	200: "OK",
-	400: "请求失败",
-	401: "Token鉴权失败",
-	403: "权限不足",
+	200: "common.success",
+	400: "error.badRequest",
+	401: "auth.tokenInvalid",
+	403: "auth.permissionDenied",
 }
 
 func Response(c *gin.Context, httpStatus int, code int, data interface{}, msg string) {
+	lang := i18n.GetLanguageFromContext(c)
+
+	// Translate the message if it's a message ID
+	translatedMsg := i18n.TWithLang(lang, msg)
+	if translatedMsg == msg {
+		// If translation not found, use original message
+		translatedMsg = msg
+	}
+
 	c.JSON(httpStatus, gin.H{
 		"code": code,
 		"data": data,
-		"msg":  msg,
+		"msg":  translatedMsg,
+		"lang": lang,
 	})
 }
 

@@ -3,6 +3,7 @@ package main
 import (
 	"SREFlow/config"
 	"SREFlow/internal/ctx"
+	"SREFlow/internal/i18n"
 	"SREFlow/internal/middleware"
 	"SREFlow/internal/repos"
 	"SREFlow/internal/routes"
@@ -24,6 +25,12 @@ func main() {
 
 	// Validate license
 	validateLicense()
+
+	// Initialize i18n
+	if err := i18n.Init(); err != nil {
+		log.Fatal("Failed to initialize i18n:", err)
+	}
+	fmt.Println("[i18n] Initialized with languages: en, zh")
 
 	// Initialize database
 	db := client.NewDBClient(config.Application.Database)
@@ -49,10 +56,12 @@ func main() {
 	// 全局中间件：
 	//   Recovery  - panic 恢复
 	//   TraceID   - 为每个请求注入/透传 trace id（须在日志与业务逻辑之前）
+	//   Language  - 语言识别（Accept-Language header）
 	//   Cors      - 跨域处理（须在路由之前以处理预检 OPTIONS）
 	//   Logger    - 携带 trace id 的请求日志
 	r.Use(gin.Recovery())
 	r.Use(middleware.TraceID())
+	r.Use(i18n.LanguageMiddleware())
 	r.Use(middleware.Cors())
 	r.Use(middleware.Logger())
 

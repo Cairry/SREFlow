@@ -1,6 +1,7 @@
 package repos
 
 import (
+	"SREFlow/internal/i18n"
 	"context"
 	"fmt"
 
@@ -91,7 +92,7 @@ func (g *GormClient) Count(ctx context.Context, model interface{}, where map[str
 func (g *GormClient) Begin(ctx context.Context) (InterGormClient, error) {
 	tx := g.db.WithContext(ctx).Begin()
 	if tx.Error != nil {
-		return nil, fmt.Errorf("开始事务失败: %w", tx.Error)
+		return nil, fmt.Errorf(i18n.T("error.transactionFailed", map[string]interface{}{"error": tx.Error.Error()}))
 	}
 	return &GormClient{db: tx}, nil
 }
@@ -99,7 +100,7 @@ func (g *GormClient) Begin(ctx context.Context) (InterGormClient, error) {
 // Commit 提交事务
 func (g *GormClient) Commit() error {
 	if err := g.db.Commit().Error; err != nil {
-		return fmt.Errorf("提交事务失败: %w", err)
+		return fmt.Errorf(i18n.T("error.transactionFailed", map[string]interface{}{"error": err.Error()}))
 	}
 	return nil
 }
@@ -107,7 +108,7 @@ func (g *GormClient) Commit() error {
 // Rollback 回滚事务
 func (g *GormClient) Rollback() error {
 	if err := g.db.Rollback().Error; err != nil {
-		return fmt.Errorf("回滚事务失败: %w", err)
+		return fmt.Errorf(i18n.T("error.transactionFailed", map[string]interface{}{"error": err.Error()}))
 	}
 	return nil
 }
@@ -166,7 +167,7 @@ func (g *GormClient) Query(ctx context.Context, dest interface{}, where map[stri
 	// 如果没有分页参数，直接查询所有数据
 	if option.Page <= 0 || option.PageSize <= 0 {
 		if err := db.Find(dest).Error; err != nil {
-			return nil, fmt.Errorf("查询失败: %w", err)
+			return nil, fmt.Errorf(i18n.T("error.queryFailed", map[string]interface{}{"error": err.Error()}))
 		}
 		return &PaginateResult{
 			Data:       dest,
@@ -182,7 +183,7 @@ func (g *GormClient) Query(ctx context.Context, dest interface{}, where map[stri
 	// 先统计总数
 	countDB := db.Session(&gorm.Session{})
 	if err := countDB.Count(&total).Error; err != nil {
-		return nil, fmt.Errorf("统计总数失败: %w", err)
+		return nil, fmt.Errorf(i18n.T("error.queryFailed", map[string]interface{}{"error": err.Error()}))
 	}
 
 	// 计算偏移量
@@ -190,7 +191,7 @@ func (g *GormClient) Query(ctx context.Context, dest interface{}, where map[stri
 
 	// 执行分页查询
 	if err := db.Offset(offset).Limit(option.PageSize).Find(dest).Error; err != nil {
-		return nil, fmt.Errorf("分页查询失败: %w", err)
+		return nil, fmt.Errorf(i18n.T("error.queryFailed", map[string]interface{}{"error": err.Error()}))
 	}
 
 	// 计算总页数
