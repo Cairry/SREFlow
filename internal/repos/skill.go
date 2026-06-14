@@ -11,6 +11,7 @@ type (
 		Create(skill *models.Skill) error
 		GetByID(id string) (*models.Skill, error)
 		GetByWorkspaceID(workspaceID string) ([]*models.Skill, error)
+		CountAll() (int64, error)
 		GetByIDs(ids []string) ([]*models.Skill, error)
 		Update(skill *models.Skill) error
 		Delete(id string) error
@@ -42,6 +43,12 @@ func (r *skillRepo) GetByWorkspaceID(workspaceID string) ([]*models.Skill, error
 	var skills []*models.Skill
 	err := r.db.Where("workspace_id = ?", workspaceID).Find(&skills).Error
 	return skills, err
+}
+
+func (r *skillRepo) CountAll() (int64, error) {
+	var count int64
+	err := r.db.Model(&models.Skill{}).Count(&count).Error
+	return count, err
 }
 
 func (r *skillRepo) GetByIDs(ids []string) ([]*models.Skill, error) {

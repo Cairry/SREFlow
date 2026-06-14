@@ -11,6 +11,7 @@ type WorkspaceRepoInter interface {
 	Create(workspace *models.Workspace) error
 	GetByID(id string) (*models.Workspace, error)
 	GetAll() ([]*models.Workspace, error)
+	Count() (int64, error)
 	Update(workspace *models.Workspace) error
 	Delete(id string) error
 }
@@ -43,6 +44,12 @@ func (r *GormWorkspaceRepo) GetAll() ([]*models.Workspace, error) {
 		return nil, err
 	}
 	return workspaces, nil
+}
+
+func (r *GormWorkspaceRepo) Count() (int64, error) {
+	var count int64
+	err := r.db.Model(&models.Workspace{}).Count(&count).Error
+	return count, err
 }
 
 func (r *GormWorkspaceRepo) Update(workspace *models.Workspace) error {

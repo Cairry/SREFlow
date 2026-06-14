@@ -14,6 +14,7 @@ import (
 	"SREFlow/internal/repos"
 	"SREFlow/internal/types"
 	"SREFlow/internal/workflow/mcppool"
+	"SREFlow/pkg/license"
 	"SREFlow/pkg/tools"
 )
 
@@ -56,6 +57,15 @@ func (s *MCPService) Get(c context.Context, id string) (interface{}, error) {
 
 // Create 创建MCP服务器
 func (s *MCPService) Create(c context.Context, req *types.RequestCreateMCPServer, workspaceID string) (interface{}, error) {
+	// Check license limit (global)
+	count, err := s.repo.CountAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to count MCP servers: %w", err)
+	}
+	if !license.CheckMCPLimit(int(count)) {
+		return nil, fmt.Errorf("license limit exceeded: maximum number of MCP servers reached")
+	}
+
 	server := &models.MCPServer{
 		ID:          tools.RandId(),
 		WorkspaceID: workspaceID,

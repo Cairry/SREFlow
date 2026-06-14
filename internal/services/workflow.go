@@ -12,6 +12,7 @@ import (
 	"SREFlow/internal/repos"
 	"SREFlow/internal/types"
 	"SREFlow/internal/workflow"
+	"SREFlow/pkg/license"
 	"SREFlow/pkg/tools"
 	"SREFlow/pkg/trace"
 
@@ -316,6 +317,15 @@ func (s *NewWorkflowService) ListWorkflows(workspaceId string) (data interface{}
 // Create 创建工作流
 func (s *NewWorkflowService) Create(req interface{}) (data interface{}, err error) {
 	r := req.(*types.RequestCreateWorkflow)
+
+	// Check license limit (global)
+	count, err := s.workflowRepo.CountAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to count workflows: %w", err)
+	}
+	if !license.CheckWorkflowLimit(int(count)) {
+		return nil, fmt.Errorf("license limit exceeded: maximum number of workflows reached")
+	}
 
 	// 转换为 WorkflowWithNodes 以便处理 nodes 和 edges
 	workflowWithNodes := &repos.WorkflowWithNodes{

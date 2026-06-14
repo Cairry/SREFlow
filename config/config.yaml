@@ -18,4 +18,4 @@ Database:
 
 License:
   # license文件路径
-  path: "config/license.lic"
+  path: "config/test-license.lic"

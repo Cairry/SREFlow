@@ -8,6 +8,7 @@ import (
 	"SREFlow/internal/models"
 	"SREFlow/internal/repos"
 	"SREFlow/internal/types"
+	"SREFlow/pkg/license"
 	"SREFlow/pkg/tools"
 
 	"github.com/zeromicro/go-zero/core/logc"
@@ -53,6 +54,15 @@ func (s *WorkspaceService) GetByID(ctx context.Context, id string) (data interfa
 // Create 创建工作空间
 func (s *WorkspaceService) Create(ctx context.Context, req interface{}) (data interface{}, err error) {
 	r := req.(*types.RequestCreateWorkspace)
+
+	// Check license limit
+	count, err := s.workspaceRepo.Count()
+	if err != nil {
+		return nil, fmt.Errorf("failed to count workspaces: %w", err)
+	}
+	if !license.CheckWorkspaceLimit(int(count)) {
+		return nil, fmt.Errorf("license limit exceeded: maximum number of workspaces reached")
+	}
 
 	workspace := &models.Workspace{
 		ID:   tools.RandId(),

@@ -11,6 +11,7 @@ type (
 		Create(server *models.MCPServer) error
 		GetByID(id string) (*models.MCPServer, error)
 		GetByWorkspaceID(workspaceID string) ([]*models.MCPServer, error)
+		CountAll() (int64, error)
 		Update(server *models.MCPServer) error
 		Delete(id string) error
 	}
@@ -41,6 +42,12 @@ func (r *mcpServerRepo) GetByWorkspaceID(workspaceID string) ([]*models.MCPServe
 	var servers []*models.MCPServer
 	err := r.db.Where("workspace_id = ?", workspaceID).Find(&servers).Error
 	return servers, err
+}
+
+func (r *mcpServerRepo) CountAll() (int64, error) {
+	var count int64
+	err := r.db.Model(&models.MCPServer{}).Count(&count).Error
+	return count, err
 }
 
 func (r *mcpServerRepo) Update(server *models.MCPServer) error {

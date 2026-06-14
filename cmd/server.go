@@ -23,9 +23,6 @@ func main() {
 	// Load configuration
 	config.Init()
 
-	// Validate license
-	validateLicense()
-
 	// Initialize i18n
 	if err := i18n.Init(); err != nil {
 		log.Fatal("Failed to initialize i18n:", err)
@@ -45,6 +42,9 @@ func main() {
 
 	// Initialize services
 	services.Init(ctx)
+
+	// Validate license and check compliance
+	validateLicenseAndCheckCompliance(ctx)
 
 	// Initialize Gin router
 	if config.Application.Server.Mode == "release" {
@@ -68,9 +68,6 @@ func main() {
 	// Register routes
 	routes.Register(r)
 
-	// Start license expiry monitor
-	go monitorLicenseExpiry(config.Application.License.Path)
-
 	// Start server
 	port := config.Application.Server.Port
 	if port == "" {
@@ -86,7 +83,7 @@ func main() {
 	}
 }
 
-func validateLicense() {
+func validateLicenseAndCheckCompliance(ctx *ctx.Context) {
 	licCfg := config.Application.License
 	if licCfg.Path == "" {
 		log.Fatal("[License] License path is not configured")
@@ -110,10 +107,50 @@ func validateLicense() {
 		}
 	}
 
+	// Set license to global manager
+	license.SetLicense(lic)
+
 	fmt.Printf("[License] Valid | Holder: %s\n", lic.Holder)
 	if lic.ExpiresAt > 0 {
+		// Start license expiry monitor
+		go monitorLicenseExpiry(config.Application.License.Path)
 		fmt.Printf("[License] Expires at: %s\n", time.Unix(lic.ExpiresAt, 0).Format("2006-01-02 15:04:05"))
+	} else {
+		fmt.Println("[License] Expires: Never (perpetual)")
 	}
+	if lic.MaxWorkspaces > 0 {
+		fmt.Printf("[License] Max Workspaces: %d\n", lic.MaxWorkspaces)
+	}
+	if lic.MaxWorkflows > 0 {
+		fmt.Printf("[License] Max Workflows: %d\n", lic.MaxWorkflows)
+	}
+	if lic.MaxMCP > 0 {
+		fmt.Printf("[License] Max MCP Servers: %d\n", lic.MaxMCP)
+	}
+	if lic.MaxSkills > 0 {
+		fmt.Printf("[License] Max Skills: %d\n", lic.MaxSkills)
+	}
+
+	// Check license compliance at startup
+	countProvider := license.NewRepoCountProvider(
+		ctx.Database.Workspace(),
+		ctx.Database.Workflow(),
+		ctx.Database.MCPServer(),
+		ctx.Database.Skill(),
+	)
+	validator := license.NewValidator(countProvider, 1*time.Hour)
+
+	violations := validator.ValidateStartup()
+	if len(violations) > 0 {
+		fmt.Println("[License] License violations detected!")
+		for _, v := range violations {
+			fmt.Printf("  - %s\n", v.Message)
+		}
+		log.Fatal("[License] Service cannot start due to license violations")
+	}
+
+	// Start periodic compliance check
+	go validator.StartPeriodicCheck(context.Background())
 }
 
 func monitorLicenseExpiry(licensePath string) {
@@ -126,7 +163,7 @@ func monitorLicenseExpiry(licensePath string) {
 			log.Fatalf("[License] Check failed: %v", err)
 		}
 		if lic.IsExpired() {
-			panic(fmt.Sprintf("[License] Expired! Holder: %s, Expired at: %s", lic.Holder, time.Unix(lic.ExpiresAt, 0).Format("2006-01-02 15:04:05")))
+			log.Fatalf("[License] Expired! Holder: %s, Expired at: %s", lic.Holder, time.Unix(lic.ExpiresAt, 0).Format("2006-01-02 15:04:05"))
 		}
 	}
 }

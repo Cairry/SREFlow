@@ -2,10 +2,12 @@ package services
 
 import (
 	"context"
+	"fmt"
 
 	"SREFlow/internal/models"
 	"SREFlow/internal/repos"
 	"SREFlow/internal/types"
+	"SREFlow/pkg/license"
 	"SREFlow/pkg/tools"
 )
 
@@ -48,6 +50,15 @@ func (s *SkillService) Get(c context.Context, id string) (interface{}, error) {
 
 // Create 创建Skill
 func (s *SkillService) Create(c context.Context, req *types.RequestCreateSkill, workspaceID string) (interface{}, error) {
+	// Check license limit (global)
+	count, err := s.repo.CountAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to count skills: %w", err)
+	}
+	if !license.CheckSkillLimit(int(count)) {
+		return nil, fmt.Errorf("license limit exceeded: maximum number of skills reached")
+	}
+
 	skill := &models.Skill{
 		ID:          tools.RandId(),
 		WorkspaceID: workspaceID,

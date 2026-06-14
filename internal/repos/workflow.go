@@ -15,6 +15,7 @@ type (
 		GetByID(id string) (*models.Workflow, error)
 		GetAll() ([]*models.Workflow, error)
 		GetByWorkspaceID(workspaceID string) ([]*models.Workflow, error)
+		CountAll() (int64, error)
 		Update(workflow *models.Workflow) error
 		Delete(id string) error
 		DeleteByWorkspaceID(workspaceID string) error
@@ -92,6 +93,13 @@ func (r *workflowRepo) GetByWorkspaceID(workspaceID string) ([]*models.Workflow,
 	var workflows []*models.Workflow
 	err := r.db.Where("workspace_id = ?", workspaceID).Order("created_at DESC").Find(&workflows).Error
 	return workflows, err
+}
+
+// CountAll counts all workflows
+func (r *workflowRepo) CountAll() (int64, error) {
+	var count int64
+	err := r.db.Model(&models.Workflow{}).Count(&count).Error
+	return count, err
 }
 
 // Update updates a workflow

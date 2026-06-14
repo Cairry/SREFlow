@@ -17,10 +17,14 @@ import (
 
 // License represents a license payload
 type License struct {
-	Holder    string `json:"holder"`
-	IssuedAt  int64  `json:"issued_at"`
-	ExpiresAt int64  `json:"expires_at"`
-	MachineID string `json:"machine_id,omitempty"`
+	Holder        string `json:"holder"`
+	IssuedAt      int64  `json:"issued_at"`
+	ExpiresAt     int64  `json:"expires_at"`
+	MachineID     string `json:"machine_id,omitempty"`
+	MaxWorkspaces int    `json:"max_workspaces,omitempty"` // 0 means unlimited
+	MaxWorkflows  int    `json:"max_workflows,omitempty"`  // 0 means unlimited
+	MaxMCP        int    `json:"max_mcp,omitempty"`        // 0 means unlimited
+	MaxSkills     int    `json:"max_skills,omitempty"`     // 0 means unlimited
 }
 
 // LicenseFile represents the signed license file on disk

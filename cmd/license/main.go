@@ -17,6 +17,10 @@ func main() {
 	licHolder := genLicCmd.String("holder", "", "License holder (company name), required")
 	licDuration := genLicCmd.String("duration", "365d", "License validity duration (e.g. 30d, 365d, 0 for perpetual)")
 	licMachineID := genLicCmd.String("machine-id", "", "Machine ID to bind to (optional)")
+	licMaxWorkspaces := genLicCmd.Int("max-workspaces", 0, "Maximum number of workspaces (0 = unlimited)")
+	licMaxWorkflows := genLicCmd.Int("max-workflows", 0, "Maximum number of workflows (0 = unlimited)")
+	licMaxMCP := genLicCmd.Int("max-mcp", 0, "Maximum number of MCP servers (0 = unlimited)")
+	licMaxSkills := genLicCmd.Int("max-skills", 0, "Maximum number of skills (0 = unlimited)")
 	licPrivKey := genLicCmd.String("private-key", "config/license.pem", "Path to private key")
 	licOutput := genLicCmd.String("output", "config/license.lic", "Output path for license file")
 
@@ -60,8 +64,12 @@ func main() {
 
 		now := time.Now()
 		lic := license.License{
-			Holder:   *licHolder,
-			IssuedAt: now.Unix(),
+			Holder:        *licHolder,
+			IssuedAt:      now.Unix(),
+			MaxWorkspaces: *licMaxWorkspaces,
+			MaxWorkflows:  *licMaxWorkflows,
+			MaxMCP:        *licMaxMCP,
+			MaxSkills:     *licMaxSkills,
 		}
 
 		if duration > 0 {
@@ -96,6 +104,26 @@ func main() {
 		} else {
 			fmt.Println("  Expires:   Never (perpetual)")
 		}
+		if lic.MaxWorkspaces > 0 {
+			fmt.Printf("  Max Workspaces: %d\n", lic.MaxWorkspaces)
+		} else {
+			fmt.Println("  Max Workspaces: Unlimited")
+		}
+		if lic.MaxWorkflows > 0 {
+			fmt.Printf("  Max Workflows: %d\n", lic.MaxWorkflows)
+		} else {
+			fmt.Println("  Max Workflows: Unlimited")
+		}
+		if lic.MaxMCP > 0 {
+			fmt.Printf("  Max MCP Servers: %d\n", lic.MaxMCP)
+		} else {
+			fmt.Println("  Max MCP Servers: Unlimited")
+		}
+		if lic.MaxSkills > 0 {
+			fmt.Printf("  Max Skills: %d\n", lic.MaxSkills)
+		} else {
+			fmt.Println("  Max Skills: Unlimited")
+		}
 		fmt.Printf("  Output:    %s\n", *licOutput)
 
 	case "verify":
@@ -125,6 +153,26 @@ func main() {
 			fmt.Printf("  Expires:   %s\n", time.Unix(lic.ExpiresAt, 0).Format("2006-01-02 15:04:05"))
 		} else {
 			fmt.Println("  Expires:   Never (perpetual)")
+		}
+		if lic.MaxWorkspaces > 0 {
+			fmt.Printf("  Max Workspaces: %d\n", lic.MaxWorkspaces)
+		} else {
+			fmt.Println("  Max Workspaces: Unlimited")
+		}
+		if lic.MaxWorkflows > 0 {
+			fmt.Printf("  Max Workflows: %d\n", lic.MaxWorkflows)
+		} else {
+			fmt.Println("  Max Workflows: Unlimited")
+		}
+		if lic.MaxMCP > 0 {
+			fmt.Printf("  Max MCP Servers: %d\n", lic.MaxMCP)
+		} else {
+			fmt.Println("  Max MCP Servers: Unlimited")
+		}
+		if lic.MaxSkills > 0 {
+			fmt.Printf("  Max Skills: %d\n", lic.MaxSkills)
+		} else {
+			fmt.Println("  Max Skills: Unlimited")
 		}
 
 	default:
