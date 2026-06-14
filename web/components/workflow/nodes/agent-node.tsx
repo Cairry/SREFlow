@@ -8,7 +8,6 @@ import type { AgentNodeData } from "@/lib/workflow-types";
 function AgentNodeComponent({ data, selected, ...props }: NodeProps) {
   const nodeData = data as AgentNodeData;
   const skillCount = nodeData.skillIds?.length || 0;
-  const toolCount = nodeData.selectedTools?.length || 0;
 
   return (
     <BaseNode
@@ -23,7 +22,7 @@ function AgentNodeComponent({ data, selected, ...props }: NodeProps) {
           {nodeData.model || "Agent"}
         </div>
         <div className="text-xs text-workflow-text-subtle font-mono truncate">
-          ReAct Agent{skillCount > 0 ? ` · ${skillCount} skill${skillCount > 1 ? "s" : ""}` : ""}{toolCount > 0 ? ` · ${toolCount} tool${toolCount > 1 ? "s" : ""}` : ""}
+          ReAct Agent{skillCount > 0 ? ` · ${skillCount} skill${skillCount > 1 ? "s" : ""}` : ""}
         </div>
       </div>
     </BaseNode>

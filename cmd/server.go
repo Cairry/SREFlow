@@ -17,11 +17,24 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zeromicro/go-zero/core/logx"
 )
 
 func main() {
 	// Load configuration
 	config.Init()
+
+	// 根据 Mode 设置日志级别
+	// debug: 输出 Debug 级别日志
+	// release: 只输出 Info 及以上级别
+	switch config.Application.Server.Mode {
+	case "debug":
+		logx.SetLevel(logx.DebugLevel)
+		fmt.Println("[Log] Level: DEBUG")
+	default:
+		logx.SetLevel(logx.InfoLevel)
+		fmt.Println("[Log] Level: INFO")
+	}
 
 	// Initialize i18n
 	if err := i18n.Init(); err != nil {

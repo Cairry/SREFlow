@@ -163,7 +163,6 @@ export const defaultNodeData: Record<WorkflowNodeType, object> = {
     prompt: "",
     maxIterations: 10,
     skillIds: [],
-    selectedTools: [],
   },
 };
 

@@ -1,6 +1,6 @@
 Server:
   port: "9002"
-  # release / debug / test
+  # release / debug
   mode: "release"
 
 Database:
@@ -18,4 +18,4 @@ Database:
 
 License:
   # license文件路径
-  path: "config/test-license.lic"
+  path: "config/license.lic"

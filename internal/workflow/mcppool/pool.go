@@ -74,7 +74,7 @@ func (p *MCPPool) GetOrCreateClient(ctx context.Context, serverID, serverURL str
 }
 
 func (p *MCPPool) createClient(ctx context.Context, serverURL string, serverType models.MCPServerType, headers map[string]string, apiKey string, timeout int) (*mcpclient.Client, error) {
-	logc.Infof(ctx, "[MCPPool] Creating MCP client: serverURL=%s, type=%s, timeout=%ds, hasAPIKey=%v, headerCount=%d",
+	logc.Debugf(ctx, "[MCPPool] Creating MCP client: serverURL=%s, type=%s, timeout=%ds, hasAPIKey=%v, headerCount=%d",
 		serverURL, serverType, timeout, apiKey != "", len(headers))
 
 	if apiKey != "" {
@@ -89,13 +89,13 @@ func (p *MCPPool) createClient(ctx context.Context, serverURL string, serverType
 
 	timeoutDuration := time.Duration(timeout) * time.Second
 	if timeoutDuration <= 0 {
-		logc.Infof(ctx, "[MCPPool] Timeout was %ds (<=0), defaulting to 30s", timeout)
+		logc.Debugf(ctx, "[MCPPool] Timeout was %ds (<=0), defaulting to 30s", timeout)
 		timeoutDuration = 30 * time.Second
 	}
 
 	switch serverType {
 	case models.MCPServerTypeHTTP, models.MCPServerTypeStreamableHTTP:
-		logc.Infof(ctx, "[MCPPool] Using StreamableHTTP transport for %s", serverURL)
+		logc.Debugf(ctx, "[MCPPool] Using StreamableHTTP transport for %s", serverURL)
 		opts := []transport.StreamableHTTPCOption{
 			transport.WithHTTPTimeout(timeoutDuration),
 		}
@@ -104,7 +104,7 @@ func (p *MCPPool) createClient(ctx context.Context, serverURL string, serverType
 		}
 		client, err = mcpclient.NewStreamableHttpClient(serverURL, opts...)
 	case models.MCPServerTypeSSE:
-		logc.Infof(ctx, "[MCPPool] Using SSE transport for %s", serverURL)
+		logc.Debugf(ctx, "[MCPPool] Using SSE transport for %s", serverURL)
 		httpClient := &http.Client{Timeout: timeoutDuration}
 		opts := []transport.ClientOption{
 			transport.WithHTTPClient(httpClient),
@@ -119,16 +119,15 @@ func (p *MCPPool) createClient(ctx context.Context, serverURL string, serverType
 	}
 
 	if err != nil {
-		logc.Errorf(ctx, "[MCPPool] Failed to create MCP client: %v", err)
+		logc.Debugf(ctx, "[MCPPool] Failed to create MCP client: %v", err)
 		return nil, fmt.Errorf("failed to create MCP client: %w", err)
 	}
 
-	logc.Infof(ctx, "[MCPPool] Client created, calling Start()...")
 	if err := client.Start(ctx); err != nil {
-		logc.Errorf(ctx, "[MCPPool] Client.Start() failed: %v", err)
+		logc.Debugf(ctx, "[MCPPool] Client.Start() failed: %v", err)
 		return nil, fmt.Errorf("failed to start MCP client: %w", err)
 	}
-	logc.Infof(ctx, "[MCPPool] Client.Start() succeeded, calling Initialize()...")
+	logc.Debugf(ctx, "[MCPPool] Client.Start() succeeded, calling Initialize()...")
 
 	initResult, err := client.Initialize(ctx, mcp.InitializeRequest{
 		Params: mcp.InitializeParams{
@@ -140,12 +139,11 @@ func (p *MCPPool) createClient(ctx context.Context, serverURL string, serverType
 		},
 	})
 	if err != nil {
-		logc.Errorf(ctx, "[MCPPool] Initialize() failed: %v", err)
 		client.Close()
 		return nil, fmt.Errorf("failed to initialize MCP client: %w", err)
 	}
 
-	logc.Infof(ctx, "[MCPPool] Connected to MCP server %s (protocol: %s, server: %s)",
+	logc.Debugf(ctx, "[MCPPool] Connected to MCP server %s (protocol: %s, server: %s)",
 		serverURL, initResult.ProtocolVersion, initResult.ServerInfo.Name)
 
 	return client, nil
@@ -172,4 +170,11 @@ func (p *MCPPool) RemoveClient(serverID string) {
 			entry.client.Close()
 		}
 	}
+}
+
+// ReconnectClient atomically removes and recreates a client.
+// Use this when a session error is detected (e.g., "Invalid session ID").
+func (p *MCPPool) ReconnectClient(ctx context.Context, serverID, serverURL string, serverType models.MCPServerType, headers map[string]string, apiKey string, timeout int) (*mcpclient.Client, error) {
+	p.RemoveClient(serverID)
+	return p.GetOrCreateClient(ctx, serverID, serverURL, serverType, headers, apiKey, timeout)
 }

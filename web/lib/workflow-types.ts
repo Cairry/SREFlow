@@ -116,7 +116,6 @@ export interface AgentNodeData extends BaseNodeData {
   prompt?: string;
   maxIterations?: number;
   skillIds?: string[];
-  selectedTools?: string[]; // "serverId::toolName" format
 }
 
 export interface HTTPNodeData extends BaseNodeData {

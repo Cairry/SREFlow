@@ -299,10 +299,6 @@ func collectInputString(input map[string]any) string {
 	var parts []string
 	for key, value := range input {
 		valStr := fmt.Sprintf("%v", value)
-		// 如果值太长，截断
-		if len(valStr) > 2000 {
-			valStr = valStr[:2000] + "...(truncated)"
-		}
 		parts = append(parts, fmt.Sprintf("**%s**:\n%s", key, valStr))
 	}
 	return strings.Join(parts, "\n\n")
