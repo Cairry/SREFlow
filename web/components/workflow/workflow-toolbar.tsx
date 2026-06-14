@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react"
+import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 
 import { cn } from "@/lib/utils";
@@ -20,7 +20,10 @@ import {
   Terminal,
   History,
   ArrowLeft,
+  PanelTop,
+  PanelTopClose,
 } from "lucide-react";
+import { isNavHidden, toggleNav } from "@/lib/nav-toggle";
 import type { WorkflowNode, WorkflowNodeType } from "@/lib/workflow-types";
 import type { Edge } from "@xyflow/react";
 
@@ -44,6 +47,28 @@ interface WorkflowToolbarProps {
   showOutput: boolean;
   showAddNode: boolean;
   onToggleAddNode: (buttonRect?: DOMRect) => void;
+}
+
+function NavToggleButton() {
+  const [hidden, setHidden] = useState(isNavHidden);
+
+  useEffect(() => {
+    const handler = () => setHidden(isNavHidden());
+    window.addEventListener("storage", handler);
+    window.addEventListener("flowforge-nav-toggle", handler);
+    return () => {
+      window.removeEventListener("storage", handler);
+      window.removeEventListener("flowforge-nav-toggle", handler);
+    };
+  }, []);
+
+  return (
+    <IconButton
+      icon={hidden ? <PanelTop className="w-4 h-4" /> : <PanelTopClose className="w-4 h-4" />}
+      onClick={toggleNav}
+      title={hidden ? "Show navigation" : "Hide navigation"}
+    />
+  );
 }
 
 function ButtonGroup({ children }: { children: React.ReactNode }) {
@@ -190,6 +215,11 @@ export function WorkflowToolbar({
               onClick={onOpenApiCall}
               title="API 调用"
             />
+          </ButtonGroup>
+
+          {/* Nav Toggle */}
+          <ButtonGroup>
+            <NavToggleButton />
           </ButtonGroup>
         </div>
 

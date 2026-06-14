@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import Image from "next/image";
 import { Workflow, Zap, Sun, Moon, Monitor, Plus, LayoutGrid, Trash2, Edit2, X, Database, Puzzle, HelpCircle, BookOpen } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Select,
   SelectContent,
@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { workspaceApi, Workspace } from "@/lib/api/workspace";
 import { useI18n } from "@/i18n";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { isNavHidden, onNavToggle, isDetailPage, isInDetailMode, onDetailModeChange } from "@/lib/nav-toggle";
 
 const navigationItems = [
   { nameKey: "navigation.workflows", href: "/workflows", icon: Workflow },
@@ -54,10 +55,26 @@ export function Navigation() {
   const [editWorkspaceName, setEditWorkspaceName] = useState("");
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [loading, setLoading] = useState(true);
+  const [navHidden, setNavHidden] = useState(false);
+  const [detailMode, setDetailMode] = useState(false);
 
   // Prevent hydration mismatch
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  // Listen for nav toggle events
+  useEffect(() => {
+    setNavHidden(isNavHidden());
+    const unsubscribe = onNavToggle((hidden) => setNavHidden(hidden));
+    return unsubscribe;
+  }, []);
+
+  // Listen for detail mode changes (skill editor)
+  useEffect(() => {
+    setDetailMode(isInDetailMode());
+    const unsubscribe = onDetailModeChange((isDetail) => setDetailMode(isDetail));
+    return unsubscribe;
   }, []);
 
   // Load workspaces and restore selected workspace from localStorage
@@ -181,13 +198,16 @@ export function Navigation() {
   );
 
   const currentWorkspace = workspaces.find(w => w.id === currentWorkspaceId);
-  const isWorkflowEditor = pathname.startsWith("/workflows/") && pathname !== "/workflows";
+  const isOnDetailPage = isDetailPage(pathname) || detailMode;
 
-  // 在 workflow 编辑页隐藏全局导航栏
-  if (isWorkflowEditor) return null;
+  // Only hide nav on detail pages; on other pages, always show
+  const shouldHide = isOnDetailPage && navHidden;
 
   return (
-    <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <nav className={cn(
+      "border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 transition-all duration-300 overflow-hidden",
+      shouldHide ? "max-h-0 border-b-0" : "max-h-20"
+    )}>
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center space-x-8">
@@ -234,7 +254,7 @@ export function Navigation() {
           {/* Right side - Workspace Selector and Theme Toggle */}
           <div className="flex items-center gap-3">
             {/* Workspace Selector - Only show on workflows/integrations list pages, not in workflow editor */}
-            {!loading && !isWorkflowEditor && (pathname === "/workflows" || pathname === "/integrations" || pathname === "/mcp-tools" || pathname === "/skills" || pathname === "/help") && (
+            {!loading && (pathname === "/workflows" || pathname === "/integrations" || pathname === "/mcp-tools" || pathname === "/skills" || pathname === "/help") && (
               <div className="flex items-center">
                 <LayoutGrid className="h-4 w-4 mr-2 text-muted-foreground" />
                 {workspaces.length === 0 ? (
