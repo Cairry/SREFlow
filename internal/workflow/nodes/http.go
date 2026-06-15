@@ -47,20 +47,21 @@ func (e *HTTPExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext)
 
 	logc.Infof(ctx, "[HTTP] Sending %s request to %s", method, url)
 
-	// 替换模板变量
-	resolvedBody := resolveTemplateVars(body, nodeCtx.Input)
+	normalizedMethod := strings.ToUpper(method)
+
+	// 替换模板变量（GET/HEAD 请求无 body）
+	var resolvedBody string
+	if normalizedMethod != "GET" && normalizedMethod != "HEAD" {
+		resolvedBody = resolveTemplateVars(body, nodeCtx.Input)
+	}
 
 	// 构建请求
 	var req *http.Request
 	var err error
 
-	normalizedMethod := strings.ToUpper(method)
-	if normalizedMethod == "GET" {
-		sep := "?"
-		if strings.Contains(url, "?") {
-			sep = "&"
-		}
-		req, err = http.NewRequest("GET", url+sep+"body="+resolvedBody, nil)
+	if normalizedMethod == "GET" || normalizedMethod == "HEAD" {
+		// GET/HEAD 请求不带 body
+		req, err = http.NewRequest(normalizedMethod, url, nil)
 	} else {
 		req, err = http.NewRequest(normalizedMethod, url, strings.NewReader(resolvedBody))
 	}
@@ -78,12 +79,15 @@ func (e *HTTPExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext)
 			}
 		}
 	}
-	// 默认 Content-Type
-	if req.Header.Get("Content-Type") == "" {
+	// 默认 Content-Type（仅对有 body 的请求设置）
+	if normalizedMethod != "GET" && normalizedMethod != "HEAD" && req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	// 设置超时
+	// 设置超时（兑底 30s，防止 timeout=0 导致请求永久挂起）
+	if timeout <= 0 {
+		timeout = 30
+	}
 	client := &http.Client{
 		Timeout: time.Duration(timeout) * time.Second,
 	}

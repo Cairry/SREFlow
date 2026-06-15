@@ -976,6 +976,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
                     <option value="POST">POST</option>
                     <option value="PUT">PUT</option>
                     <option value="PATCH">PATCH</option>
+                    <option value="DELETE">DELETE</option>
                   </select>
                 </div>
                 <div>
@@ -1244,6 +1245,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
                 <option value="POST">POST</option>
                 <option value="PUT">PUT</option>
                 <option value="PATCH">PATCH</option>
+                <option value="DELETE">DELETE</option>
               </select>
             </div>
             <div>
@@ -1273,6 +1275,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
               className={`${textareaClass} h-16`}
             />
           </div>
+          {safeGetValue("method", "POST") !== "GET" && (
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className={labelClass + " mb-0"}>Body</label>
@@ -1297,6 +1300,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
               className={`${textareaClass} h-28`}
             />
           </div>
+          )}
         </>
       )}
 

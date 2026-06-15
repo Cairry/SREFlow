@@ -78,7 +78,7 @@ export interface KubernetesNodeData extends BaseNodeData {
 
 export interface WebhookConfig {
   url: string;
-  method: "GET" | "POST" | "PUT" | "PATCH";
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   headers?: Record<string, string>;
   body?: string;
   timeout?: number;
@@ -120,7 +120,7 @@ export interface AgentNodeData extends BaseNodeData {
 
 export interface HTTPNodeData extends BaseNodeData {
   url: string;
-  method: "GET" | "POST" | "PUT" | "PATCH";
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   headers?: Record<string, string>;
   body?: string;
   timeout?: number;
