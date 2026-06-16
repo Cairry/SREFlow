@@ -373,6 +373,33 @@ func (e *WorkflowExecutor) executeBatch(ctx *ExecutionContext, nodeIDs []string)
 			wg.Add(1)
 			go func(nid string) {
 				defer func() {
+					if r := recover(); r != nil {
+						// goroutine panic 恢复：将节点标记为失败，防止 wg.Wait() 死锁
+						errMsg := fmt.Sprintf("node panic: %v", r)
+						logc.Errorf(ctx.Context, "[Execute] node %s panic: %v", nid, r)
+						select {
+						case errorChan <- fmt.Errorf("%s", errMsg):
+						default:
+						}
+						// 将节点标记为 failed
+						ctx.Graph.Mutex.RLock()
+						node := ctx.Graph.Nodes[nid]
+						ctx.Graph.Mutex.RUnlock()
+						if node != nil {
+							node.Mutex.Lock()
+							node.Status = NodeStatusFailed
+							node.Error = fmt.Errorf("%s", errMsg)
+							node.Mutex.Unlock()
+						}
+						e.executionMutex.Lock()
+						ctx.Execution.FailedNodes = append(ctx.Execution.FailedNodes, nid)
+						ctx.Execution.RunningNodes = removeFromStringSlice(ctx.Execution.RunningNodes, nid)
+						e.executionMutex.Unlock()
+						ctx.Monitor.EmitStreamNodeFailed(ctx.Execution.ID, ctx.Execution.WorkflowID, ctx.Execution.WorkflowName, nid, "", errMsg, 0)
+						if ctx.StateManager != nil {
+							ctx.StateManager.SetNodeState(ctx.Execution.ID, nid, "", NodeStateFailed, nil, errMsg)
+						}
+					}
 					<-semaphore
 					wg.Done()
 				}()
@@ -462,7 +489,7 @@ func (e *WorkflowExecutor) executeNode(ctx *ExecutionContext, nodeID string) err
 	} else if result != nil && result.Error != "" {
 		// 节点返回了错误结果但没有抛出异常
 		hasError = true
-		err = fmt.Errorf(result.Error)
+		err = fmt.Errorf("%s", result.Error)
 	}
 
 	// 需要在节点锁内更新执行状态，避免并发写入问题
@@ -627,8 +654,12 @@ func (e *WorkflowExecutor) executeSingleNode(ctx *ExecutionContext, nodeCtx *mod
 	}
 
 	timeout := ctx.Config.DefaultTimeout
-	if timeoutVal, ok := nodeCtx.Config["timeout"].(float64); ok {
+	if timeoutVal, ok := nodeCtx.Config["timeout"].(float64); ok && timeoutVal > 0 {
 		timeout = time.Duration(timeoutVal) * time.Second
+	}
+	// 兑底超时：防止 timeout=0 导致 context 立即过期或永久挂起
+	if timeout <= 0 {
+		timeout = 60 * time.Second
 	}
 
 	execCtx, cancel := context.WithTimeout(ctx.Context, timeout)

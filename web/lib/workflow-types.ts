@@ -76,22 +76,10 @@ export interface KubernetesNodeData extends BaseNodeData {
   resourceType?: "status" | "event";
 }
 
-export interface WebhookConfig {
-  url: string;
-  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-  headers?: Record<string, string>;
-  body?: string;
-  timeout?: number;
-}
-
 export interface OutputNodeData extends BaseNodeData {
-  outputType: "file" | "webhook";
+  outputType: "file";
   customFilename?: string;
-  fileType?: "txt" | "md" | "json" | "csv" | "html" | "pdf";
-  autoDownload?: boolean;
-  includeTimestamp?: boolean;
-  formatContent?: boolean;
-  webhook?: WebhookConfig;
+  contentTemplate?: string;
 }
 
 export interface StartNodeData extends BaseNodeData {

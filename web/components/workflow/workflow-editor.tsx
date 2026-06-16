@@ -20,6 +20,7 @@ import { WorkflowCanvas, defaultNodeData } from "./workflow-canvas";
 import { WorkflowToolbar } from "./workflow-toolbar";
 import { OutputPanel } from "./output-panel";
 import { useToast } from "@/hooks/use-toast";
+import { downloadFile } from "@/lib/utils";
 import { X } from "lucide-react";
 import { LoadWorkflowDialog } from "./load-workflow-dialog";
 import { NodeEditPanel } from "./node-edit-panel";
@@ -370,6 +371,10 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
           });
           // 实时更新节点结果，让 OutputPanel 立即显示该节点输出
           setNodeResults([...nodeResultsRef.current]);
+          // Output 节点完成时自动触发文件下载
+          if (node?.type === "Output") {
+            tryAutoDownloadOutput(nodes, nodeResultsRef.current);
+          }
         }
       } catch (err) {
         console.error('[SSE] node_completed parse error:', err);
@@ -535,6 +540,14 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
           toast({ title: "Stopped", description: "Workflow execution was cancelled", variant: "destructive" });
         } else if (isCompleted) {
           toast({ title: "Completed", description: "Workflow finished successfully" });
+          // Auto-download output file after successful completion
+          if (outputNode && outputNode.outputs) {
+            const content = (outputNode.outputs.output as string) || outputNode.output || "";
+            const filename = (outputNode.outputs.filename as string) || "output.md";
+            if (content) {
+              downloadFile(content, filename.replace(/\.md$/, ""), "md", false);
+            }
+          }
         } else {
           toast({ title: "Failed", description: "Workflow execution failed", variant: "destructive" });
         }

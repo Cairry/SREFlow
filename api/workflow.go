@@ -236,8 +236,6 @@ func getExecutionStatus(ctx *gin.Context) {
 }
 
 // streamExecutionStatus SSE 流式推送执行状态
-// 前端通过 EventSource 连接此端点，实时接收节点状态变化事件
-// GET /api/workflow/executions/:executionId/stream
 func streamExecutionStatus(ctx *gin.Context) {
 	executionId := ctx.Param("executionId")
 
@@ -246,47 +244,17 @@ func streamExecutionStatus(ctx *gin.Context) {
 		return
 	}
 
-	// 预先发送 SSE 头
 	ctx.Header("Content-Type", "text/event-stream")
 	ctx.Header("Cache-Control", "no-cache")
 	ctx.Header("Connection", "keep-alive")
 	ctx.Header("X-Accel-Buffering", "no")
 
-	// 发送初始连接确认
 	ctx.Writer.Write([]byte(": connected\n\n"))
 	ctx.Writer.Flush()
 
-	// 立即发送测试消息验证连接
-	testEvent := map[string]interface{}{
-		"event":   "test_connection",
-		"task_id": executionId,
-		"workflow": map[string]interface{}{
-			"id":   executionId,
-			"name": "Test Workflow",
-		},
-		"node": map[string]interface{}{
-			"id":   "test-node",
-			"type": "test",
-		},
-		"data": map[string]interface{}{
-			"id":              executionId,
-			"workflow_id":     executionId,
-			"workflow_run_id": executionId,
-			"status":          "testing",
-			"message":         "SSE connection test successful",
-		},
-	}
-	testJSON, _ := json.Marshal(testEvent)
-	ctx.Writer.Write(fmt.Appendf(nil, "event: %s\ndata: %s\n\n", "test_connection", string(testJSON)))
-	ctx.Writer.Flush()
+	eventCh := services.Workflow.RegisterStreamChannel(executionId)
+	defer services.Workflow.UnregisterStreamChannel(executionId)
 
-	// 注册流式 SSE 事件通道
-	eventCh := services.Workflow.RegisterEventSSEEventChannel(executionId)
-
-	// 清理：确保 channel 从 map 中移除（幂等操作）
-	defer services.Workflow.UnregisterEventSSEEventChannel(executionId)
-
-	// 用心跳保活连接（每 10s）
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 

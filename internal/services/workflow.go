@@ -264,8 +264,7 @@ func (s *NewWorkflowService) CancelWorkflowExecution(ctx context.Context, execut
 	// 通过 SSE 通知前端
 	event := workflow.NewStreamStyleEvent("workflow_cancelled", executionID, "", "")
 	event.Data.Status = "cancelled"
-	eventCh := s.monitor.GetStreamEventChannel(executionID)
-	if eventCh != nil {
+	if eventCh := s.monitor.GetStreamChannel(executionID); eventCh != nil {
 		eventCh <- event
 	}
 
@@ -774,8 +773,8 @@ func (s *NewWorkflowService) ExecuteAsync(req interface{}) (data interface{}, er
 		FailedNodes:    []string{},
 	}
 
-	// 注册 SSE 事件通道（让前端可以通过 SSE 接收节点执行事件）
-	s.monitor.RegisterEventSSEEventChannel(execution.ID, make(chan *workflow.StreamStyleEvent, 100))
+	// 注册 SSE 事件通道
+	s.monitor.RegisterStreamChannel(execution.ID)
 
 	// 启动异步执行
 	go func() {
@@ -832,17 +831,14 @@ func (s *NewWorkflowService) ExecuteAsync(req interface{}) (data interface{}, er
 	}, nil
 }
 
-// RegisterEventSSEEventChannel 注册流式 SSE 事件通道
-func (s *NewWorkflowService) RegisterEventSSEEventChannel(executionId string) chan *workflow.StreamStyleEvent {
-	// 直接调用 monitor 的方法，它会处理 channel 复用逻辑
-	eventCh := make(chan *workflow.StreamStyleEvent, 100)
-	return s.monitor.RegisterEventSSEEventChannel(executionId, eventCh)
+// RegisterStreamChannel 注册流式 SSE 事件通道
+func (s *NewWorkflowService) RegisterStreamChannel(executionId string) chan *workflow.StreamStyleEvent {
+	return s.monitor.RegisterStreamChannel(executionId)
 }
 
-// UnregisterEventSSEEventChannel 取消注册流式 SSE 事件通道
-func (s *NewWorkflowService) UnregisterEventSSEEventChannel(executionId string) {
-	s.monitor.UnregisterEventSSEEventChannel(executionId)
-	logc.Infof(context.Background(), "[WorkflowService] Stream SSE channel UNREGISTERED for execution: %s", executionId)
+// UnregisterStreamChannel 取消注册流式 SSE 事件通道
+func (s *NewWorkflowService) UnregisterStreamChannel(executionId string) {
+	s.monitor.UnregisterStreamChannel(executionId)
 }
 
 // GetExecutionResult 获取执行结果

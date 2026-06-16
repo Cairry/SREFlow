@@ -136,6 +136,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
   const lokiQueryRef = useRef<HTMLTextAreaElement>(null);
   const chQueryRef = useRef<HTMLTextAreaElement>(null);
   const webhookBodyRef = useRef<HTMLTextAreaElement>(null);
+  const contentTemplateRef = useRef<HTMLTextAreaElement>(null);
   const conditionRef = useRef<HTMLInputElement>(null);
   const sshCommandRef = useRef<HTMLTextAreaElement>(null);
   const sshHostRef = useRef<HTMLInputElement>(null);
@@ -153,6 +154,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
   useVariablePickerShortcuts(lokiQueryRef, () => setActivePicker(activePicker === "lokiQuery" ? null : "lokiQuery"));
   useVariablePickerShortcuts(chQueryRef, () => setActivePicker(activePicker === "chQuery" ? null : "chQuery"));
   useVariablePickerShortcuts(webhookBodyRef, () => setActivePicker(activePicker === "webhookBody" ? null : "webhookBody"));
+  useVariablePickerShortcuts(contentTemplateRef, () => setActivePicker(activePicker === "contentTemplate" ? null : "contentTemplate"));
   useVariablePickerShortcuts(conditionRef, () => setActivePicker(activePicker === "condition" ? null : "condition"));
   useVariablePickerShortcuts(sshCommandRef, () => setActivePicker(activePicker === "sshCommand" ? null : "sshCommand"));
   useVariablePickerShortcuts(sshHostRef, () => setActiveTextPicker(activeTextPicker === "sshHost" ? null : "sshHost"));
@@ -188,6 +190,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
       lokiQuery: lokiQueryRef,
       chQuery: chQueryRef,
       webhookBody: webhookBodyRef,
+      contentTemplate: contentTemplateRef,
       sshCommand: sshCommandRef,
       smartRouterInput: smartRouterInputRef,
     };
@@ -220,20 +223,12 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
     const fieldMap: Record<string, string> = {
       prompt: "prompt", systemPrompt: "systemPrompt",
       goscript: "code", promql: "query", esQuery: "query",
-      lokiQuery: "query", chQuery: "query", webhookBody: "webhook",
+      lokiQuery: "query", chQuery: "query",
+      webhookBody: "body", contentTemplate: "contentTemplate",
       sshCommand: "command", smartRouterInput: "input",
     };
     const field = fieldMap[pickerKey];
-    if (field === "webhook") {
-      if (node?.type === "HTTP") {
-        onUpdate(node!.id, { body: newValue });
-      } else {
-        const webhook = { ...((node?.data as any)?.webhook || {}), body: currentValue.slice(0, start) + variableRef + currentValue.slice(end) };
-        onUpdate(node!.id, { webhook });
-      }
-    } else {
-      onUpdate(node!.id, { [field]: newValue });
-    }
+    onUpdate(node!.id, { [field]: newValue });
     setActivePicker(null);
     setTimeout(() => {
       textarea.focus();
@@ -931,119 +926,51 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
       {node.type === "Output" && (
         <>
           <div>
-            <label className={labelClass}>Output Type</label>
-            <select
-              value={(node.data as any).outputType || 'webhook'}
-              onChange={(e) => handleChange("outputType", e.target.value)}
-              className={selectClass}
-            >
-              <option value="file">File Output</option>
-              <option value="webhook">Webhook</option>
-            </select>
+            <label className={labelClass}>Filename</label>
+            <input
+              type="text"
+              value={safeGetValue("customFilename", "")}
+              onChange={(e) => handleChange("customFilename", e.target.value)}
+              placeholder="e.g. rca-report"
+              className={inputClass}
+            />
           </div>
 
-          {/* Webhook Configuration */}
-          {(node.data as any).outputType === 'webhook' && (
-            <div className="space-y-3 border-t border-workflow-border pt-3 mt-3">
-              <p className="text-xs text-workflow-text-muted font-mono font-medium">Webhook Configuration</p>
-
-              <div>
-                <label className={labelClass}>URL</label>
-                <input
-                  type="text"
-                  value={(node.data as any).webhook?.url || ''}
-                  onChange={(e) => handleChange("webhook", {
-                    ...(node.data as any).webhook || {},
-                    url: e.target.value
-                  })}
-                  placeholder="https://example.com/webhook"
-                  className={inputClass}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelClass}>Method</label>
-                  <select
-                    value={(node.data as any).webhook?.method || 'POST'}
-                    onChange={(e) => handleChange("webhook", {
-                      ...(node.data as any).webhook || {},
-                      method: e.target.value
-                    })}
-                    className={selectClass}
-                  >
-                    <option value="GET">GET</option>
-                    <option value="POST">POST</option>
-                    <option value="PUT">PUT</option>
-                    <option value="PATCH">PATCH</option>
-                    <option value="DELETE">DELETE</option>
-                  </select>
-                </div>
-                <div>
-                  <label className={labelClass}>Timeout (s)</label>
-                  <input
-                    type="number"
-                    value={(node.data as any).webhook?.timeout || 30}
-                    onChange={(e) => handleChange("webhook", {
-                      ...(node.data as any).webhook || {},
-                      timeout: parseInt(e.target.value) || 30
-                    })}
-                    min="1"
-                    max="300"
-                    className={inputClass}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className={labelClass}>Headers (JSON)</label>
-                <textarea
-                  value={JSON.stringify((node.data as any).webhook?.headers || { "Content-Type": "application/json" }, null, 2)}
-                  onChange={(e) => {
-                    try {
-                      const headers = JSON.parse(e.target.value);
-                      handleChange("webhook", {
-                        ...(node.data as any).webhook || {},
-                        headers
-                      });
-                    } catch {
-                      // Invalid JSON, don't update
-                    }
-                  }}
-                  placeholder='{"Content-Type": "application/json"}'
-                  className={`${textareaClass} h-16`}
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className={labelClass + " mb-0"}>Body</label>
-                  <VariablePicker
-                    nodes={nodes}
-                    edges={edges}
-                    currentNodeId={node.id}
-                    onInsert={(ref) => insertVariable("webhookBody", ref)}
-                    trigger={
-                      <button type="button" className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono text-workflow-text-muted border border-workflow-border rounded hover:bg-workflow-surface-hover transition-colors duration-200">
-                        <Braces className="h-3 w-3" />
-                        Vars
-                      </button>
-                    }
-                  />
-                </div>
-                <textarea
-                  ref={webhookBodyRef}
-                  value={(node.data as any).webhook?.body || '{\n  "data": {{input}}\n}'}
-                  onChange={(e) => handleChange("webhook", {
-                    ...(node.data as any).webhook || {},
-                    body: e.target.value
-                  })}
-                  placeholder='{"data": {{input}}}'
-                  className={`${textareaClass} h-28`}
-                />
-              </div>
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className={labelClass + " mb-0"}>Content</label>
+              <VariablePicker
+                nodes={nodes}
+                edges={edges}
+                currentNodeId={node.id}
+                onInsert={(ref) => insertVariable("contentTemplate", ref)}
+                trigger={
+                  <button type="button" className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono text-workflow-text-muted border border-workflow-border rounded hover:bg-workflow-surface-hover transition-colors duration-200">
+                    <Braces className="h-3 w-3" />
+                    Vars
+                  </button>
+                }
+              />
             </div>
-          )}
+            <p className="text-[10px] text-workflow-text-subtle font-mono mb-1.5">
+              Use <code className="text-primary">{"{{nodeId.field}}"}</code> to reference upstream outputs. Leave empty to auto-concatenate all inputs.
+            </p>
+            <textarea
+              ref={contentTemplateRef}
+              value={safeGetValue("contentTemplate", "")}
+              onChange={(e) => handleChange("contentTemplate", e.target.value)}
+              placeholder={`# RCA Report
+
+**Alert:** {{start.alerts[0].labels.alertname}}
+
+## Analysis
+{{llm_1.output}}
+
+## Actions
+{{agent_1.output}}`}
+              className={`${textareaClass} h-48`}
+            />
+          </div>
         </>
       )}
 

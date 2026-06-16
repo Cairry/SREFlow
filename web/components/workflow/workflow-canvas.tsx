@@ -117,14 +117,9 @@ export const defaultNodeData: Record<WorkflowNodeType, object> = {
   },
   Output: {
     label: "Output",
-    outputType: "webhook",
-    webhook: {
-      url: "",
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: "{\n  \"data\": {{input}}\n}",
-      timeout: 30,
-    },
+    outputType: "file",
+    customFilename: "",
+    contentTemplate: "",
   },
   Start: {
     label: "Start",

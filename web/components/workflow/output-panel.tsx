@@ -244,7 +244,9 @@ export function OutputPanel({
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleDownload(item.output!);
+                                  const content = (item.outputs?.output as string) || item.output || "";
+                                  const filename = (item.outputs?.filename as string) || "output.md";
+                                  handleDownload(content, filename, "text/markdown");
                                 }}
                                 className="p-1 hover:bg-workflow-surface rounded transition-colors duration-200"
                                 title="Download output"

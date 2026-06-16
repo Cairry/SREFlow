@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Webhook,
   AlertTriangle,
+  Bot,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -37,9 +38,15 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   "file-output": <FileOutput className="w-5 h-5" />,
   play: <Play className="w-5 h-5" />,
   puzzle: <Puzzle className="w-5 h-5" />,
+  bot: <Bot className="w-5 h-5" />,
 };
 
-const SECTIONS = [
+const SECTIONS: {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  subItems?: { id: string; label: string }[];
+}[] = [
   { id: "quickstart", label: "快速入门", icon: <Rocket className="w-4 h-4" /> },
   { id: "concepts", label: "核心概念", icon: <BookOpen className="w-4 h-4" /> },
   { id: "alertmanager", label: "对接 AlertManager", icon: <AlertTriangle className="w-4 h-4" /> },
@@ -287,6 +294,33 @@ export default function HelpPage() {
                     <p className="text-sm text-muted-foreground">
                       MCP（Model Context Protocol）工具是对外部工具服务的标准化接入。在 MCP Tools 页面配置 MCP 服务器后，启用其提供的工具即可在工作流中使用 MCP 节点调用这些工具，扩展工作流的能力边界。
                     </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Skill 技能</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Skill 是为 Agent 节点提供的可复用领域知识模板。每个 Skill 包含名称、描述和正文内容（System Prompt），Agent 在运行时按需加载 Skill 的完整内容作为上下文，从而在特定领域提供更专业的分析和决策能力。
+                    </p>
+                    <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-3 space-y-2">
+                      <p className="text-sm font-medium text-sky-600 dark:text-sky-400">💡 工作原理</p>
+                      <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+                        <li>在 Skills 页面创建 Skill，编写领域知识内容（如排查手册、操作规范、参考文档等）</li>
+                        <li>在 Agent 节点的 <code className="text-violet-400 font-mono">Skills</code> 配置中勾选需要启用的 Skill</li>
+                        <li>Agent 运行时，会看到所有已启用 Skill 的名称和描述；当需要某个 Skill 的完整内容时，Agent 通过工具调用自动加载</li>
+                        <li>Skill 内容会注入到 Agent 的上下文中，帮助 Agent 在特定领域做出更准确的判断</li>
+                      </ul>
+                    </div>
+                    <div className="rounded-lg border bg-muted/20 p-3 space-y-1">
+                      <p className="text-xs font-medium text-muted-foreground mb-1">典型使用场景：</p>
+                      <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+                        <li><strong className="text-foreground">故障排查手册</strong>：将常见故障的排查步骤写入 Skill，Agent 遇到问题时自动参考执行</li>
+                        <li><strong className="text-foreground">运维操作规范</strong>：将团队标准操作流程（SOP）写入 Skill，确保 Agent 按规范执行操作</li>
+                        <li><strong className="text-foreground">领域知识库</strong>：将系统架构说明、服务依赖关系等写入 Skill，让 Agent 具备领域背景知识</li>
+                      </ul>
+                    </div>
                   </CardContent>
                 </Card>
               </div>
