@@ -30,6 +30,7 @@ func BootstrapNodeRegistry(mcpRepo repos.MCPServerRepoInter, skillRepo repos.Ski
 	// 注册输入输出节点
 	registry.Register(nodes.NewStartExecutor())
 	registry.Register(nodes.NewOutputExecutor())
+	registry.Register(nodes.NewReplyExecutor())
 	registry.Register(nodes.NewHTTPExecutor())
 
 	return registry

@@ -61,6 +61,12 @@ export const NODE_COLORS: Record<WorkflowNodeType, { bg: string; border: string;
     accent: "text-gray-600 dark:text-gray-400",
     handle: "bg-gray-500 border-gray-600",
   },
+  Reply: {
+    bg: "bg-workflow-node-bg",
+    border: "border-emerald-500/50 dark:border-emerald-500/50",
+    accent: "text-emerald-600 dark:text-emerald-400",
+    handle: "bg-emerald-500 border-emerald-600",
+  },
   Start: {
     bg: "bg-workflow-node-bg",
     border: "border-gray-500/50 dark:border-gray-500/50",
@@ -110,6 +116,7 @@ export const NODE_ICONS: Record<WorkflowNodeType, string> = {
   ClickHouse: "bar-chart-3",
   SSH: "terminal",
   Output: "file-output",
+  Reply: "message-square",
   Start: "play",
   GoScript: "code",
   HTTP: "globe",

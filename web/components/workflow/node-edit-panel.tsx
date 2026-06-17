@@ -102,6 +102,9 @@ export const NODE_OUTPUT_VARIABLES: Record<string, { name: string; type: string;
     { name: "latency", type: "float", description: "Total execution time in seconds" },
     { name: "toolCalls", type: "array", description: "Array of tool call records (when tools were used)" },
   ],
+  Reply: [
+    { name: "reply", type: "string", description: "The reply content sent to caller" },
+  ],
 };
 
 interface NodeEditPanelProps {
@@ -137,6 +140,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
   const chQueryRef = useRef<HTMLTextAreaElement>(null);
   const webhookBodyRef = useRef<HTMLTextAreaElement>(null);
   const contentTemplateRef = useRef<HTMLTextAreaElement>(null);
+  const replyContentTemplateRef = useRef<HTMLTextAreaElement>(null);
   const conditionRef = useRef<HTMLInputElement>(null);
   const sshCommandRef = useRef<HTMLTextAreaElement>(null);
   const sshHostRef = useRef<HTMLInputElement>(null);
@@ -155,6 +159,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
   useVariablePickerShortcuts(chQueryRef, () => setActivePicker(activePicker === "chQuery" ? null : "chQuery"));
   useVariablePickerShortcuts(webhookBodyRef, () => setActivePicker(activePicker === "webhookBody" ? null : "webhookBody"));
   useVariablePickerShortcuts(contentTemplateRef, () => setActivePicker(activePicker === "contentTemplate" ? null : "contentTemplate"));
+  useVariablePickerShortcuts(replyContentTemplateRef, () => setActivePicker(activePicker === "replyContentTemplate" ? null : "replyContentTemplate"));
   useVariablePickerShortcuts(conditionRef, () => setActivePicker(activePicker === "condition" ? null : "condition"));
   useVariablePickerShortcuts(sshCommandRef, () => setActivePicker(activePicker === "sshCommand" ? null : "sshCommand"));
   useVariablePickerShortcuts(sshHostRef, () => setActiveTextPicker(activeTextPicker === "sshHost" ? null : "sshHost"));
@@ -191,6 +196,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
       chQuery: chQueryRef,
       webhookBody: webhookBodyRef,
       contentTemplate: contentTemplateRef,
+      replyContentTemplate: replyContentTemplateRef,
       sshCommand: sshCommandRef,
       smartRouterInput: smartRouterInputRef,
     };
@@ -967,6 +973,46 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
 {{llm_1.output}}
 
 ## Actions
+{{agent_1.output}}`}
+              className={`${textareaClass} h-48`}
+            />
+          </div>
+        </>
+      )}
+
+      {/* Reply Node */}
+      {node.type === "Reply" && (
+        <>
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className={labelClass + " mb-0"}>Reply Content</label>
+              <VariablePicker
+                nodes={nodes}
+                edges={edges}
+                currentNodeId={node.id}
+                onInsert={(ref) => insertVariable("replyContentTemplate", ref)}
+                trigger={
+                  <button type="button" className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono text-workflow-text-muted border border-workflow-border rounded hover:bg-workflow-surface-hover transition-colors duration-200">
+                    <Braces className="h-3 w-3" />
+                    Vars
+                  </button>
+                }
+              />
+            </div>
+            <p className="text-[10px] text-workflow-text-subtle font-mono mb-1.5">
+              Use <code className="text-primary">{"{{nodeId.field}}"}</code> to reference upstream outputs. Leave empty to auto-concatenate all inputs.
+            </p>
+            <textarea
+              ref={replyContentTemplateRef}
+              value={safeGetValue("contentTemplate", "")}
+              onChange={(e) => handleChange("contentTemplate", e.target.value)}
+              placeholder={`Enter reply content...
+
+Example:
+## Analysis Result
+{{llm_1.output}}
+
+## Recommendation
 {{agent_1.output}}`}
               className={`${textareaClass} h-48`}
             />

@@ -30,6 +30,7 @@ import {
   Container,
   Terminal,
   Bot,
+  MessageSquare,
 } from "lucide-react";
 import { useReactFlow } from "@xyflow/react";
 
@@ -45,6 +46,7 @@ const ICONS: Record<WorkflowNodeType, React.ReactNode> = {
   SSH: <Terminal className="w-4 h-4" />,
   Kubernetes: <Container className="w-4 h-4" />,
   Output: <FileOutput className="w-4 h-4" />,
+  Reply: <MessageSquare className="w-4 h-4" />,
   Start: <Play className="w-4 h-4" />,
   GoScript: <Code className="w-4 h-4" />,
   HTTP: <Globe className="w-4 h-4" />,

@@ -901,7 +901,7 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
   const toWorkflowNodeType = (type: string): WorkflowNodeType => {
     const validTypes: WorkflowNodeType[] = [
       "LLM", "Condition", "SmartRouter", "Prometheus", "Jaeger",
-      "Elasticsearch", "Loki", "ClickHouse", "Output",
+      "Elasticsearch", "Loki", "ClickHouse", "Output", "Reply",
       "Start", "GoScript"
     ];
 

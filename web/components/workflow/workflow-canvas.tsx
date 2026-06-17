@@ -36,6 +36,7 @@ import {
   SSHNode,
   KubernetesNode,
   OutputNode,
+  ReplyNode,
   StartNode,
   GoScriptNode,
   HTTPNode,
@@ -55,6 +56,7 @@ const nodeTypes: NodeTypes = {
   SSH: SSHNode,
   Kubernetes: KubernetesNode,
   Output: OutputNode,
+  Reply: ReplyNode,
   Start: StartNode,
   GoScript: GoScriptNode,
   HTTP: HTTPNode,
@@ -119,6 +121,10 @@ export const defaultNodeData: Record<WorkflowNodeType, object> = {
     label: "Output",
     outputType: "file",
     customFilename: "",
+    contentTemplate: "",
+  },
+  Reply: {
+    label: "Reply",
     contentTemplate: "",
   },
   Start: {

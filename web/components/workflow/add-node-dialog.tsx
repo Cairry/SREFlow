@@ -22,6 +22,7 @@ import {
   Wrench,
   Loader2,
   Bot,
+  MessageSquare,
 } from "lucide-react";
 import { MenuDialog } from "./ui/dialog";
 import { mcpApi, MCPServer, MCPServerTool } from "@/lib/api/mcp";
@@ -68,6 +69,7 @@ export const NODE_DEFINITIONS: NodeDef[] = [
   { type: "SmartRouter", label: "SmartRouter", description: "AI-powered smart routing", icon: <Route className="w-4 h-4" />, category: "logic" },
   // Output
   { type: "Output", label: "Output", description: "Export Output", icon: <FileOutput className="w-4 h-4" />, category: "output" },
+  { type: "Reply", label: "Reply", description: "Reply result directly to caller", icon: <MessageSquare className="w-4 h-4" />, category: "output" },
 ];
 
 interface AddNodeDialogProps {

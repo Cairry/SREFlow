@@ -82,6 +82,10 @@ export interface OutputNodeData extends BaseNodeData {
   contentTemplate?: string;
 }
 
+export interface ReplyNodeData extends BaseNodeData {
+  contentTemplate?: string;
+}
+
 export interface StartNodeData extends BaseNodeData {
   text: string;
 }
@@ -127,6 +131,7 @@ export type WorkflowNodeData =
   | SSHNodeData
   | KubernetesNodeData
   | OutputNodeData
+  | ReplyNodeData
   | StartNodeData
   | GoScriptNodeData
   | HTTPNodeData
@@ -146,6 +151,7 @@ export type WorkflowNodeType =
   | "SSH"
   | "Kubernetes"
   | "Output"
+  | "Reply"
   | "Start"
   | "GoScript"
   | "HTTP"
