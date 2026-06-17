@@ -1,7 +1,7 @@
 Server:
   port: "9002"
   # release / debug
-  mode: "release"
+  mode: "debug"
 
 Database:
   # 数据库类型: mysql 或 sqlite (默认: mysql)

@@ -84,26 +84,32 @@ func (e *AgentExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext
 		resolvedUserPrompt = collectInputString(nodeCtx.Input)
 	}
 
-	// 加载 Skill 列表
-	skillList, err := e.loadSkillList(ctx, skillIDsStr)
+	// 加载 Skill 列表及完整模型（用于构建统一 skill 工具）
+	skillList, skillMap, err := e.loadSkillList(ctx, skillIDsStr)
 	if err != nil {
 		logc.Errorf(ctx, "[Agent] Failed to load skill list: %v", err)
 	}
 
-	// 创建 Skill 加载工具
 	var einoTools []tool.BaseTool
-	for _, sk := range skillList {
-		wrapper := &skillToolWrapper{
+
+	// 有 skill 时创建统一 skill 工具（单工具接受 name 参数，描述动态列出所有可用 skill）
+	if len(skillList) > 0 {
+		skillDesc := buildSkillToolDescription(skillList)
+		st := &skillTool{
 			toolInfo: &schema.ToolInfo{
-				Name:        fmt.Sprintf("load_skill_%s", sk.Name),
-				Desc:        fmt.Sprintf("Load skill '%s' content. Description: %s", sk.Name, sk.Description),
-				ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{}),
+				Name: "skill",
+				Desc: skillDesc,
+				ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
+					"skill": {
+						Type:     schema.String,
+						Desc:     "The skill name to load. E.g., \"pdf\" or \"xlsx\"",
+						Required: true,
+					},
+				}),
 			},
-			skillID:   sk.ID,
-			skillName: sk.Name,
-			skillRepo: e.skillRepo,
+			skills: skillMap,
 		}
-		einoTools = append(einoTools, wrapper)
+		einoTools = append(einoTools, st)
 	}
 
 	// 加载 workspace 下所有 MCP 工具，让 agent 自主发现并调用
@@ -127,6 +133,8 @@ func (e *AgentExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext
 	if err != nil {
 		return nil, fmt.Errorf("failed to create chat model: %w", err)
 	}
+
+	logc.Infof(ctx, "[Agent] Chat model created: %v", chatModel.GetType())
 
 	// 工具调用记录 & 中间件
 	var toolCallRecords []toolCallRecord
@@ -159,15 +167,10 @@ func (e *AgentExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext
 		ToolCallMiddlewares: []compose.ToolMiddleware{toolMiddleware},
 	}
 
-	// 构建 Skill 列表 system prompt（只包含 name 和 description，引导 agent 使用 tool 加载）
-	var skillListPrompt string
+	// 构建 Skill 系统提示（渐进式披露：引导 agent 使用 skill 工具按需加载）
+	skillListPrompt := ""
 	if len(skillList) > 0 {
-		var skillParts []string
-		skillParts = append(skillParts, "You have access to the following skills. Call the 'load_skill_<skill_name>' tool to load a skill's full content when you need it:")
-		for _, sk := range skillList {
-			skillParts = append(skillParts, fmt.Sprintf("- %s: %s", sk.Name, sk.Description))
-		}
-		skillListPrompt = strings.Join(skillParts, "\n")
+		skillListPrompt = skillSystemPrompt
 	}
 
 	// 创建 eino ReAct Agent，通过 MessageModifier 在每轮模型调用前注入 skill 列表
@@ -186,6 +189,8 @@ func (e *AgentExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext
 		return nil, fmt.Errorf("failed to create react agent: %w", err)
 	}
 
+	logc.Infof(ctx, "[Agent] ReAct agent created successfully")
+
 	// 构建初始消息
 	messages := []*schema.Message{schema.UserMessage(resolvedUserPrompt)}
 
@@ -193,17 +198,33 @@ func (e *AgentExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext
 	stepNum := 0
 	var stepMu sync.Mutex
 	modelHandler := &einocallbacks.ModelCallbackHandler{
+		OnStart: func(ctx context.Context, info *callbacks.RunInfo, input *einocomponentmodel.CallbackInput) context.Context {
+			if input == nil {
+				return ctx
+			}
+			logc.Infof(ctx, "[Agent] LLM call - Messages count: %d", len(input.Messages))
+			for i, msg := range input.Messages {
+				logc.Infof(ctx, "[Agent] LLM input[%d] role=%s content=%s", i, msg.Role, truncateLog(msg.Content, 2000))
+				for _, tc := range msg.ToolCalls {
+					logc.Infof(ctx, "[Agent] LLM input[%d] ToolCall: %s(%s)", i, tc.Function.Name, tc.Function.Arguments)
+				}
+				if msg.ToolCallID != "" {
+					logc.Infof(ctx, "[Agent] LLM input[%d] ToolCallID: %s", i, msg.ToolCallID)
+				}
+			}
+			return ctx
+		},
 		OnEnd: func(ctx context.Context, info *callbacks.RunInfo, output *einocomponentmodel.CallbackOutput) context.Context {
 			stepMu.Lock()
 			stepNum++
 			step := stepNum
 			stepMu.Unlock()
 			if output.Message != nil {
-				// if output.Message.Content != "" {
-				// 	logc.Infof(ctx, "[Agent] Step %d - Thought: %s", step, truncateLog(output.Message.Content, 800))
-				// }
+				if output.Message.Content != "" {
+					logc.Infof(ctx, "[Agent] Step %d - Thought: %s", step, truncateLog(output.Message.Content, 800))
+				}
 				for _, tc := range output.Message.ToolCalls {
-					logc.Infof(ctx, "[Agent] Step - ToolCall: %s(%s)", step, tc.Function.Name, tc.Function.Arguments)
+					logc.Infof(ctx, "[Agent] Step - ToolCall: %v(%v)", step, tc.Function.Name, tc.Function.Arguments)
 				}
 			}
 			return ctx
@@ -220,7 +241,7 @@ func (e *AgentExecutor) Execute(ctx context.Context, nodeCtx *models.NodeContext
 		return nil, fmt.Errorf("agent execution failed: %w", err)
 	}
 
-	logc.Debugf(ctx, "[Agent] Final response (%.2fs): %s", latency, truncateLog(msg.Content, 300))
+	logc.Infof(ctx, "[Agent] Final response (%.2fs): %s", latency, truncateLog(msg.Content, 300))
 
 	result := map[string]any{
 		"output":     msg.Content,
@@ -273,10 +294,11 @@ func getSkillIDsStr(cfg map[string]any) string {
 	}
 }
 
-// loadSkillList 加载选中 Skill 的基本信息（name + description）
-func (e *AgentExecutor) loadSkillList(ctx context.Context, skillIDsStr string) ([]skillInfo, error) {
+// loadSkillList 加载选中 Skill 的基本信息（name + description）及完整模型映射。
+// 返回 skillInfo 列表（用于构建工具描述/系统提示）和 name -> models.Skill 映射（用于 skillTool 运行时查找）。
+func (e *AgentExecutor) loadSkillList(ctx context.Context, skillIDsStr string) ([]skillInfo, map[string]*models.Skill, error) {
 	if skillIDsStr == "" {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	var ids []string
@@ -285,15 +307,16 @@ func (e *AgentExecutor) loadSkillList(ctx context.Context, skillIDsStr string) (
 	}
 
 	if len(ids) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	skills, err := e.skillRepo.GetByIDs(ids)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var list []skillInfo
+	skillMap := make(map[string]*models.Skill)
 	for _, sk := range skills {
 		if !sk.Enabled {
 			continue
@@ -303,8 +326,9 @@ func (e *AgentExecutor) loadSkillList(ctx context.Context, skillIDsStr string) (
 			Name:        sk.Name,
 			Description: sk.Description,
 		})
+		skillMap[sk.Name] = sk
 	}
-	return list, nil
+	return list, skillMap, nil
 }
 
 // isSessionError detects MCP session errors that require reconnection.

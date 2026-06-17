@@ -654,15 +654,13 @@ func formatDuration(seconds float64) string {
 }
 
 // getStatusFromEvent 根据事件类型获取工作流状态
+// 节点级别事件（node_*）不应改变工作流级别状态，
+// 只有工作流级别事件才应设置 "succeeded"/"failed"。
 func getStatusFromEvent(event string) string {
 	switch event {
-	case "running", "node_started":
+	case "running", "node_started", "node_completed", "node_failed", "node_skipped":
 		return "running"
-	case "succeeded", "node_completed":
-		return "running"
-	case "node_failed":
-		return "failed"
-	case "workflow_completed":
+	case "succeeded", "workflow_completed":
 		return "succeeded"
 	case "workflow_failed":
 		return "failed"
