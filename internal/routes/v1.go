@@ -28,4 +28,7 @@ func Register(engine *gin.Engine) {
 
 	// Skill routes
 	api.SkillController.API(group)
+
+	// Chat routes
+	api.ChatController.API(group)
 }

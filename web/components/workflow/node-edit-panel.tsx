@@ -113,9 +113,10 @@ interface NodeEditPanelProps {
   edges: import("@xyflow/react").Edge[];
   onUpdate: (nodeId: string, data: Partial<WorkflowNode["data"]>) => void;
   onClose: () => void;
+  readOnly?: boolean;
 }
 
-export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEditPanelProps) {
+export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose, readOnly = false }: NodeEditPanelProps) {
   const { toast } = useToast();
   const [beautifyingSystem, setBeautifyingSystem] = useState(false);
   const [beautifyingPrompt, setBeautifyingPrompt] = useState(false);
@@ -170,6 +171,10 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
   useVariablePickerShortcuts(smartRouterInputRef, () => setActivePicker(activePicker === "smartRouterInput" ? null : "smartRouterInput"));
 
   const insertVariable = (pickerKey: string, variableRef: string) => {
+    if (readOnly) {
+      toast({ title: "Workflow is locked", description: "Unlock the workflow to edit", variant: "destructive" });
+      return;
+    }
     if (pickerKey === "condition") {
       const input = conditionRef.current;
       if (!input) return;
@@ -244,6 +249,10 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
 
   // Handle variable insertion into plain <input> text fields (host, port)
   const insertTextVariable = (pickerKey: string, variableRef: string) => {
+    if (readOnly) {
+      toast({ title: "Workflow is locked", description: "Unlock the workflow to edit", variant: "destructive" });
+      return;
+    }
     const refMap: Record<string, React.RefObject<HTMLInputElement | null>> = {
       sshHost: sshHostRef,
       sshPort: sshPortRef,
@@ -360,6 +369,10 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
   }
 
   const handleChange = (key: string, value: unknown) => {
+    if (readOnly) {
+      toast({ title: "Workflow is locked", description: "Unlock the workflow to edit", variant: "destructive" });
+      return;
+    }
     const currentData = node.data || {};
     onUpdate(node.id, { ...currentData, [key]: value });
   };
@@ -369,9 +382,9 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
     return data[field] !== undefined ? data[field] : defaultValue;
   };
 
-  const inputClass = "w-full bg-workflow-surface/50 border border-workflow-border rounded-lg px-3 py-2 text-sm text-workflow-text font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors duration-200";
-  const selectClass = "w-full bg-workflow-surface/50 border border-workflow-border rounded-lg px-3 py-2 text-sm text-workflow-text font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors duration-200 cursor-pointer";
-  const textareaClass = "w-full bg-workflow-surface/50 border border-workflow-border rounded-lg px-3 py-2 text-sm text-workflow-text font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors duration-200 resize-none";
+  const inputClass = "w-full bg-workflow-surface/50 border border-workflow-border rounded-lg px-3 py-2 text-sm text-workflow-text font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors duration-200 disabled:opacity-60 disabled:cursor-not-allowed";
+  const selectClass = "w-full bg-workflow-surface/50 border border-workflow-border rounded-lg px-3 py-2 text-sm text-workflow-text font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors duration-200 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed";
+  const textareaClass = "w-full bg-workflow-surface/50 border border-workflow-border rounded-lg px-3 py-2 text-sm text-workflow-text font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors duration-200 resize-none disabled:opacity-60 disabled:cursor-not-allowed";
   const labelClass = "block text-xs text-workflow-text-muted font-mono mb-1.5";
 
   return (
@@ -388,7 +401,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
 
           <div>
             <label className={labelClass}>Model</label>
-            <ModelSelector value={safeGetValue("model", "") as string} onChange={(v) => handleChange("model", v)} />
+            <ModelSelector value={safeGetValue("model", "") as string} onChange={(v) => handleChange("model", v)} disabled={readOnly} />
           </div>
 
           <div>
@@ -425,6 +438,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
             </div>
             <textarea
               ref={systemPromptRef}
+              readOnly={readOnly}
               value={safeGetValue('systemPrompt', '')}
               onChange={(e) => handleChange("systemPrompt", e.target.value)}
               placeholder="Optional system instructions..."
@@ -465,6 +479,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
             </div>
             <textarea
               ref={promptRef}
+              readOnly={readOnly}
               value={safeGetValue('prompt', '')}
               onChange={(e) => handleChange("prompt", e.target.value)}
               placeholder="Enter prompt..."
@@ -496,6 +511,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
             </div>
             <textarea
               ref={promqlRef}
+              readOnly={readOnly}
               value={safeGetValue('query', 'up')}
               onChange={(e) => handleChange("query", e.target.value)}
               placeholder="up"
@@ -511,6 +527,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
               placeholder="30"
               min="1"
               max="300"
+              disabled={readOnly}
               className={inputClass}
             />
           </div>
@@ -542,6 +559,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
               value={(node.data as any).service || ""}
               onChange={(e) => handleChange("service", e.target.value)}
               placeholder="service-name"
+              disabled={readOnly}
               className={inputClass}
             />
           </div>
@@ -567,6 +585,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
               value={(node.data as any).tags || ""}
               onChange={(e) => handleChange("tags", e.target.value)}
               placeholder="http.status_code=5.*"
+              disabled={readOnly}
               className={inputClass}
             />
           </div>
@@ -599,6 +618,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
               value={(node.data as any).index || ''}
               onChange={(e) => handleChange("index", e.target.value)}
               placeholder="log-*"
+              disabled={readOnly}
               className={inputClass}
             />
           </div>
@@ -620,6 +640,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
             </div>
             <textarea
               ref={esQueryRef}
+              readOnly={readOnly}
               value={(node.data as any).query || ''}
               onChange={(e) => handleChange("query", e.target.value)}
               placeholder='{"match": {"message": "error"}}'
@@ -651,6 +672,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
             </div>
             <textarea
               ref={lokiQueryRef}
+              readOnly={readOnly}
               value={(node.data as any).query || ''}
               onChange={(e) => handleChange("query", e.target.value)}
               placeholder='{job="varlogs"}'
@@ -670,6 +692,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
               value={(node.data as any).database || ''}
               onChange={(e) => handleChange("database", e.target.value)}
               placeholder="default"
+              disabled={readOnly}
               className={inputClass}
             />
           </div>
@@ -691,6 +714,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
             </div>
             <textarea
               ref={chQueryRef}
+              readOnly={readOnly}
               value={(node.data as any).query || ''}
               onChange={(e) => handleChange("query", e.target.value)}
               placeholder="SELECT * FROM table_name"
@@ -725,6 +749,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
               value={safeGetValue("host", "")}
               onChange={(e) => handleChange("host", e.target.value)}
               placeholder="192.168.1.1"
+              disabled={readOnly}
               className={inputClass}
             />
           </div>
@@ -751,6 +776,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
               value={safeGetValue("port", 22)}
               onChange={(e) => handleChange("port", e.target.value)}
               placeholder="22"
+              disabled={readOnly}
               className={inputClass}
             />
           </div>
@@ -773,6 +799,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
             </div>
             <textarea
               ref={sshCommandRef}
+              readOnly={readOnly}
               value={safeGetValue("command", "")}
               onChange={(e) => handleChange("command", e.target.value)}
               placeholder="ls -la /home"
@@ -788,6 +815,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
               placeholder="30"
               min="1"
               max="300"
+              disabled={readOnly}
               className={inputClass}
             />
           </div>
@@ -800,12 +828,14 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
           <K8sNamespaceSelector
             namespace={safeGetValue("namespace", "")}
             onNamespaceChange={(val) => handleChange("namespace", val)}
+            disabled={readOnly}
           />
 
           <K8sPodSelector
             namespace={safeGetValue("namespace", "")}
             pod={safeGetValue("pod", "all")}
             onPodChange={(val) => handleChange("pod", val)}
+            disabled={readOnly}
           />
 
           <div>
@@ -813,6 +843,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
             <select
               value={safeGetValue("resourceType", "status")}
               onChange={(e) => handleChange("resourceType", e.target.value)}
+              disabled={readOnly}
               className={selectClass}
             >
               <option value="status">Pod Status</option>
@@ -847,6 +878,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
               value={(node.data as any).condition || ''}
               onChange={(e) => handleChange("condition", e.target.value)}
               placeholder="{{input}}"
+              disabled={readOnly}
               className={inputClass}
             />
           </div>
@@ -855,6 +887,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
             <select
               value={(node.data as any).operator || 'contains'}
               onChange={(e) => handleChange("operator", e.target.value)}
+              disabled={readOnly}
               className={selectClass}
             >
               <option value="contains">contains</option>
@@ -874,7 +907,8 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
                 value={(node.data as any).value || ''}
                 onChange={(e) => handleChange("value", e.target.value)}
                 placeholder="compare value"
-                className={inputClass}
+                disabled={readOnly}
+              className={inputClass}
               />
             </div>
           )}
@@ -892,7 +926,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
           </div>
           <div>
             <label className={labelClass}>Model</label>
-            <ModelSelector value={safeGetValue("model", "") as string} onChange={(v) => handleChange("model", v)} />
+            <ModelSelector value={safeGetValue("model", "") as string} onChange={(v) => handleChange("model", v)} disabled={readOnly} />
           </div>
           <div>
             <div className="flex items-center justify-between mb-1.5">
@@ -912,6 +946,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
             </div>
             <textarea
               ref={smartRouterInputRef}
+              readOnly={readOnly}
               value={safeGetValue('input', '')}
               onChange={(e) => handleChange("input", e.target.value)}
               placeholder="Optional: specify input data for LLM routing, e.g. {{prometheus_1.series}}. Leave empty to use all upstream outputs."
@@ -938,6 +973,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
               value={safeGetValue("customFilename", "")}
               onChange={(e) => handleChange("customFilename", e.target.value)}
               placeholder="e.g. rca-report"
+              disabled={readOnly}
               className={inputClass}
             />
           </div>
@@ -963,6 +999,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
             </p>
             <textarea
               ref={contentTemplateRef}
+              readOnly={readOnly}
               value={safeGetValue("contentTemplate", "")}
               onChange={(e) => handleChange("contentTemplate", e.target.value)}
               placeholder={`# RCA Report
@@ -1004,6 +1041,7 @@ export function NodeEditPanel({ node, nodes, edges, onUpdate, onClose }: NodeEdi
             </p>
             <textarea
               ref={replyContentTemplateRef}
+              readOnly={readOnly}
               value={safeGetValue("contentTemplate", "")}
               onChange={(e) => handleChange("contentTemplate", e.target.value)}
               placeholder={`Enter reply content...
@@ -1027,6 +1065,7 @@ Example:
           <textarea
             value={safeGetValue('text', '')}
             onChange={(e) => handleChange("text", e.target.value)}
+            readOnly={readOnly}
             placeholder={"纯文本示例: service-a is down\nJSON 示例: {\"service\": \"a\", \"error\": \"timeout\"}"}
             className={`${textareaClass} h-40`}
           />
@@ -1044,6 +1083,7 @@ Example:
               step="1000"
               value={safeGetValue('timeout', 5000)}
               onChange={(e) => handleChange("timeout", parseInt(e.target.value) || 5000)}
+              disabled={readOnly}
               className={inputClass}
             />
           </div>
@@ -1088,6 +1128,7 @@ Example:
                 onMount={(editor) => { goscriptInlineEditorRef.current = editor; }}
                 theme="vs-dark"
                 options={{
+                  readOnly: readOnly,
                   fontSize: 13,
                   minimap: { enabled: false },
                   scrollBeyondLastLine: false,
@@ -1155,6 +1196,7 @@ Example:
                   onMount={(editor) => { goscriptEditorRef.current = editor; }}
                   theme="vs-dark"
                   options={{
+                    readOnly: readOnly,
                     fontSize: 14,
                     minimap: { enabled: true },
                     scrollBeyondLastLine: false,
@@ -1203,6 +1245,7 @@ Example:
               value={safeGetValue("url", "")}
               onChange={(e) => handleChange("url", e.target.value)}
               placeholder="https://example.com/webhook"
+              disabled={readOnly}
               className={inputClass}
             />
           </div>
@@ -1212,7 +1255,8 @@ Example:
               <select
                 value={safeGetValue("method", "POST")}
                 onChange={(e) => handleChange("method", e.target.value)}
-                className={selectClass}
+                disabled={readOnly}
+              className={selectClass}
               >
                 <option value="GET">GET</option>
                 <option value="POST">POST</option>
@@ -1229,7 +1273,8 @@ Example:
                 onChange={(e) => handleChange("timeout", parseInt(e.target.value) || 30)}
                 min="1"
                 max="300"
-                className={inputClass}
+                disabled={readOnly}
+              className={inputClass}
               />
             </div>
           </div>
@@ -1245,6 +1290,7 @@ Example:
                 }
               }}
               placeholder='{"Content-Type": "application/json"}'
+              readOnly={readOnly}
               className={`${textareaClass} h-16`}
             />
           </div>
@@ -1267,6 +1313,7 @@ Example:
             </div>
             <textarea
               ref={webhookBodyRef}
+              readOnly={readOnly}
               value={safeGetValue("body", "{\n  \"data\": {{input}}\n}")}
               onChange={(e) => handleChange("body", e.target.value)}
               placeholder='{"data": {{input}}}'
@@ -1378,6 +1425,7 @@ Example:
                 }
               }}
               placeholder='{"key": "value"}'
+              readOnly={readOnly}
               className={`${textareaClass} h-32 font-mono`}
             />
           </div>
@@ -1389,7 +1437,7 @@ Example:
         <>
           <div>
             <label className={labelClass}>Model</label>
-            <ModelSelector value={safeGetValue("model", "") as string} onChange={(v) => handleChange("model", v)} />
+            <ModelSelector value={safeGetValue("model", "") as string} onChange={(v) => handleChange("model", v)} disabled={readOnly} />
           </div>
 
           <div>
@@ -1400,6 +1448,7 @@ Example:
               max={50}
               value={safeGetValue("maxIterations", 10) as number}
               onChange={(e) => handleChange("maxIterations", parseInt(e.target.value) || 10)}
+              disabled={readOnly}
               className={inputClass}
             />
           </div>
@@ -1410,6 +1459,7 @@ Example:
               selectedIds={(safeGetValue("skillIds", []) as string[]) || []}
               onChange={(ids) => handleChange("skillIds", ids)}
               skills={availableSkills}
+              disabled={readOnly}
             />
           </div>
 
@@ -1432,6 +1482,8 @@ Example:
               </div>
             </div>
             <textarea
+              ref={promptRef}
+              readOnly={readOnly}
               value={safeGetValue('prompt', '')}
               onChange={(e) => handleChange("prompt", e.target.value)}
               placeholder="User prompt for the agent..."
@@ -1452,9 +1504,10 @@ Example:
 }
 
 // ModelSelector — dynamically loads available LLM models from integration
-function ModelSelector({ value, onChange }: {
+function ModelSelector({ value, onChange, disabled }: {
   value: string;
   onChange: (val: string) => void;
+  disabled?: boolean;
 }) {
   const [models, setModels] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1472,7 +1525,7 @@ function ModelSelector({ value, onChange }: {
       .finally(() => setLoading(false));
   }, []);
 
-  const selectClass = "w-full bg-workflow-surface/50 border border-workflow-border rounded-lg px-3 py-2 text-sm text-workflow-text font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors duration-200 cursor-pointer";
+  const selectClass = "w-full bg-workflow-surface/50 border border-workflow-border rounded-lg px-3 py-2 text-sm text-workflow-text font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors duration-200 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed";
 
   if (loading) {
     return (
@@ -1495,6 +1548,7 @@ function ModelSelector({ value, onChange }: {
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
       className={selectClass}
     >
       <option value="">-- Select Model --</option>
@@ -1506,9 +1560,10 @@ function ModelSelector({ value, onChange }: {
 }
 
 // K8sNamespaceSelector — dynamically loads namespaces from K8s integration
-function K8sNamespaceSelector({ namespace, onNamespaceChange }: {
+function K8sNamespaceSelector({ namespace, onNamespaceChange, disabled }: {
   namespace: string;
   onNamespaceChange: (val: string) => void;
+  disabled?: boolean;
 }) {
   const [namespaces, setNamespaces] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1528,7 +1583,7 @@ function K8sNamespaceSelector({ namespace, onNamespaceChange }: {
       .finally(() => setLoading(false));
   }, []);
 
-  const selectClass = "w-full bg-workflow-surface/50 border border-workflow-border rounded-lg px-3 py-2 text-sm text-workflow-text font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors duration-200 cursor-pointer";
+  const selectClass = "w-full bg-workflow-surface/50 border border-workflow-border rounded-lg px-3 py-2 text-sm text-workflow-text font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors duration-200 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed";
   const labelClass = "block text-xs text-workflow-text-muted font-mono mb-1.5";
 
   return (
@@ -1543,6 +1598,7 @@ function K8sNamespaceSelector({ namespace, onNamespaceChange }: {
         <select
           value={namespace}
           onChange={(e) => onNamespaceChange(e.target.value)}
+          disabled={disabled}
           className={selectClass}
         >
           <option value="">-- Select Namespace --</option>
@@ -1556,10 +1612,11 @@ function K8sNamespaceSelector({ namespace, onNamespaceChange }: {
 }
 
 // K8sPodSelector — dynamically loads pods from K8s integration
-function K8sPodSelector({ namespace, pod, onPodChange }: {
+function K8sPodSelector({ namespace, pod, onPodChange, disabled }: {
   namespace: string;
   pod: string;
   onPodChange: (val: string) => void;
+  disabled?: boolean;
 }) {
   const [pods, setPods] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1583,7 +1640,7 @@ function K8sPodSelector({ namespace, pod, onPodChange }: {
       .finally(() => setLoading(false));
   }, [namespace]);
 
-  const selectClass = "w-full bg-workflow-surface/50 border border-workflow-border rounded-lg px-3 py-2 text-sm text-workflow-text font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors duration-200 cursor-pointer";
+  const selectClass = "w-full bg-workflow-surface/50 border border-workflow-border rounded-lg px-3 py-2 text-sm text-workflow-text font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors duration-200 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed";
   const labelClass = "block text-xs text-workflow-text-muted font-mono mb-1.5";
 
   return (
@@ -1598,6 +1655,7 @@ function K8sPodSelector({ namespace, pod, onPodChange }: {
         <select
           value={pod}
           onChange={(e) => onPodChange(e.target.value)}
+          disabled={disabled}
           className={selectClass}
         >
           <option value="all">All Pods</option>
@@ -1857,12 +1915,14 @@ function SmartRouterBranchEditor({ branches, onChange }: {
 }
 
 // SkillSelector — multi-select skills for Agent node
-function SkillSelector({ selectedIds, onChange, skills }: {
+function SkillSelector({ selectedIds, onChange, skills, disabled }: {
   selectedIds: string[];
   onChange: (ids: string[]) => void;
   skills: Skill[];
+  disabled?: boolean;
 }) {
   const toggleSkill = (id: string) => {
+    if (disabled) return;
     if (selectedIds.includes(id)) {
       onChange(selectedIds.filter((sid) => sid !== id));
     } else {
@@ -1889,6 +1949,7 @@ function SkillSelector({ selectedIds, onChange, skills }: {
             type="checkbox"
             checked={selectedIds.includes(skill.id)}
             onChange={() => toggleSkill(skill.id)}
+            disabled={disabled}
             className="rounded border-workflow-border text-primary focus:ring-primary/30"
           />
           <div className="min-w-0 flex-1">

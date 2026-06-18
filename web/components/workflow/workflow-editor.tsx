@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
 
 import {
   ReactFlowProvider,
@@ -52,6 +53,8 @@ function extractOutputValue(outputs: Record<string, unknown>): string | null {
 }
 
 function WorkflowEditorInner({ workflowId: urlWorkflowId }: { workflowId?: Promise<{ id: string }> }) {
+  const router = useRouter();
+  
   // Check for template data in sessionStorage on mount
   const getInitialData = () => {
     if (typeof window !== 'undefined') {
@@ -83,6 +86,18 @@ function WorkflowEditorInner({ workflowId: urlWorkflowId }: { workflowId?: Promi
   const [workflowDescription, setWorkflowDescription] = useState(initialData.description || "");
   const [hasChanges, setHasChanges] = useState(false);
   const [initialDescription, setInitialDescription] = useState(initialData.description || "");
+  const [isLocked, setIsLocked] = useState(true); // Default to locked
+  const [chatMode, setChatMode] = useState(false); // Chat mode toggle
+
+  // Wrap onEdgesChange to respect lock
+  const handleEdgesChange = useCallback(
+    (changes: any) => {
+      if (isLocked) return; // Prevent edge changes if locked
+      onEdgesChange(changes);
+      setHasChanges(true);
+    },
+    [onEdgesChange, isLocked]
+  );
 
   // Track description changes
   useEffect(() => {
@@ -162,15 +177,21 @@ function WorkflowEditorInner({ workflowId: urlWorkflowId }: { workflowId?: Promi
 
   const onConnect = useCallback(
     (params: Connection) => {
+      if (isLocked) return; // Prevent connections if locked
       setEdges((eds) => addEdge({ ...params, type: "default", animated: false }, eds));
       setHasChanges(true);
     },
-    [setEdges]
+    [setEdges, isLocked]
   );
 
-  // Wrap onNodesChange to prevent start node deletion
+  // Wrap onNodesChange to prevent start node deletion and respect lock
   const handleNodesChange: OnNodesChange<WorkflowNode> = useCallback(
     (changes) => {
+      // Prevent changes if workflow is locked
+      if (isLocked) {
+        return;
+      }
+      
       // Filter out delete changes for start nodes
       const filteredChanges = changes.filter(change => {
         if (change.type === "remove") {
@@ -195,12 +216,22 @@ function WorkflowEditorInner({ workflowId: urlWorkflowId }: { workflowId?: Promi
         }
       }
     },
-    [nodes, onNodesChange, toast]
+    [nodes, onNodesChange, toast, isLocked]
   );
 
   
   const handleAddNode = useCallback(
     (nodeType: WorkflowNodeType, mcpData?: { serverId: string; serverName: string; toolName: string; description: string }) => {
+      // Prevent adding nodes if workflow is locked
+      if (isLocked) {
+        toast({
+          title: "Workflow is locked",
+          description: "Unlock the workflow to add nodes",
+          variant: "destructive",
+        });
+        return;
+      }
+
       // Prevent adding multiple start nodes
       if (nodeType === "Start" && nodes.some(node => node.type === "Start")) {
         toast({
@@ -243,15 +274,16 @@ function WorkflowEditorInner({ workflowId: urlWorkflowId }: { workflowId?: Promi
       setNodes((nds) => [...nds, newNode]);
       setHasChanges(true);
     },
-    [setNodes, nodes, toast]
+    [setNodes, nodes, toast, isLocked]
   );
 
   const handleNodesUpdate = useCallback(
     (updatedNodes: WorkflowNode[]) => {
+      if (isLocked) return; // Prevent updates if locked
       setNodes(updatedNodes);
       setHasChanges(true);
     },
-    [setNodes]
+    [setNodes, isLocked]
   );
 
 // ─── Auto Layout helpers ────────────────────────────────────────────────────
@@ -353,8 +385,16 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
         const eventData = JSON.parse(e.data);
         const node = nodes.find(n => n.id === eventData.node?.id);
         if (eventData.node?.id) {
+          // 更新节点状态为 completed
+          setNodeStatuses(prev => {
+            const next = new Map(prev);
+            next.set(eventData.node.id, 'completed');
+            return next;
+          });
+          
           // 去重：回放缓冲事件与实时通道可能有重叠
           if (nodeResultsRef.current.some(r => r.nodeId === eventData.node.id)) return;
+          
           const outputs = eventData.node.outputs || {};
           const outputValue = extractOutputValue(outputs);
           nodeResultsRef.current.push({
@@ -363,11 +403,6 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
             output: outputValue as string | null,
             outputs: outputs as Record<string, unknown>,
             timestamp: new Date(),
-          });
-          setNodeStatuses(prev => {
-            const next = new Map(prev);
-            next.set(eventData.node.id, 'completed');
-            return next;
           });
           // 实时更新节点结果，让 OutputPanel 立即显示该节点输出
           setNodeResults([...nodeResultsRef.current]);
@@ -386,8 +421,16 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
       try {
         const eventData = JSON.parse(e.data);
         if (eventData.node?.id) {
+          // 更新节点状态为 failed
+          setNodeStatuses(prev => {
+            const next = new Map(prev);
+            next.set(eventData.node?.id, 'failed');
+            return next;
+          });
+          
           // 去重：回放缓冲事件与实时通道可能有重叠
           if (nodeResultsRef.current.some(r => r.nodeId === eventData.node?.id)) return;
+          
           const node = nodes.find(n => n.id === eventData.node?.id);
           nodeResultsRef.current.push({
             nodeId: eventData.node?.id,
@@ -395,11 +438,6 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
             output: null,
             error: eventData.node?.error,
             timestamp: new Date(),
-          });
-          setNodeStatuses(prev => {
-            const next = new Map(prev);
-            next.set(eventData.node?.id, 'failed');
-            return next;
           });
           // 实时更新节点结果，让 OutputPanel 立即显示该节点错误
           setNodeResults([...nodeResultsRef.current]);
@@ -565,6 +603,9 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
     eventSource.addEventListener('node_completed', handleNodeCompleted);
     eventSource.addEventListener('node_failed', handleNodeFailed);
     eventSource.addEventListener('node_skipped', handleNodeSkipped);
+    // thinking and reply events indicate node completion
+    eventSource.addEventListener('thinking', handleNodeCompleted);
+    eventSource.addEventListener('reply', handleNodeCompleted);
     eventSource.addEventListener('workflow_completed', handleWorkflowDone);
     eventSource.addEventListener('workflow_failed', handleWorkflowDone);
     eventSource.addEventListener('workflow_cancelled', handleWorkflowDone);
@@ -944,6 +985,20 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
               }
               setShowAddNode(v => !v);
             }}
+            isLocked={isLocked}
+            onToggleLock={() => setIsLocked(!isLocked)}
+            chatMode={chatMode}
+            onToggleChatMode={() => {
+              if (workflowId) {
+                router.push(`/workflows/${workflowId}/chat`);
+              } else {
+                toast({
+                  title: "Save workflow first",
+                  description: "Please save the workflow before switching to chat mode",
+                  variant: "destructive",
+                });
+              }
+            }}
           />
 
           <div className="flex-1 flex min-h-0">
@@ -952,7 +1007,7 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
               nodes={nodes}
               edges={edges}
               onNodesChange={handleNodesChange}
-              onEdgesChange={onEdgesChange}
+              onEdgesChange={handleEdgesChange}
               onConnect={onConnect}
               onNodesUpdate={handleNodesUpdate}
               onNodeClick={(node) => {
@@ -983,6 +1038,7 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
                   edges={edges}
                   onClose={() => setSelectedNode(null)}
                   onUpdate={(nodeId, data) => {
+                    if (isLocked) return; // Prevent updates if locked
                     setNodes((nds) =>
                       nds.map((node) =>
                         node.id === nodeId ? { ...node, data: { ...node.data, ...data } } : node
@@ -995,6 +1051,7 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
                     );
                     setHasChanges(true);
                   }}
+                  readOnly={isLocked}
                 />
               </div>
             </div>

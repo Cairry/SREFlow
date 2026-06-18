@@ -684,13 +684,20 @@ func (m *ExecutionMonitor) EmitStreamNodeStarted(executionID, workflowID, workfl
 }
 
 // EmitStreamNodeCompleted 发送节点完成事件
+// Reply 节点发送 reply 事件，其他节点发送 thinking 事件
 func (m *ExecutionMonitor) EmitStreamNodeCompleted(executionID, workflowID, workflowName, nodeID, nodeType string, outputs map[string]any, duration float64) {
 	stringifiedOutputs := make(map[string]string)
 	for k, v := range outputs {
 		stringifiedOutputs[k] = stringifyValue(v)
 	}
 
-	event := NewStreamNodeEvent("node_completed", executionID, workflowID, workflowName, nodeID, nodeType, nil, "", duration)
+	// 根据节点类型决定事件类型：Reply -> reply, 其他 -> thinking
+	eventType := "thinking"
+	if nodeType == "Reply" {
+		eventType = "reply"
+	}
+
+	event := NewStreamNodeEvent(eventType, executionID, workflowID, workflowName, nodeID, nodeType, nil, "", duration)
 	event.Node.Outputs = stringifiedOutputs
 	event.Data.NodeStates = m.getNodeStatesSnapshot(executionID)
 

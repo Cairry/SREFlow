@@ -14,6 +14,8 @@ type (
 		integration IntegrationRepoInter
 		mcpServer   MCPServerRepoInter
 		skill       SkillRepoInter
+		chatSession ChatSessionRepoInter
+		chatMessage ChatMessageRepoInter
 	}
 
 	EntryInter interface {
@@ -25,6 +27,8 @@ type (
 		Integration() IntegrationRepoInter
 		MCPServer() MCPServerRepoInter
 		Skill() SkillRepoInter
+		ChatSession() ChatSessionRepoInter
+		ChatMessage() ChatMessageRepoInter
 	}
 )
 
@@ -37,6 +41,8 @@ func NewEntryRepo(db *gorm.DB) EntryInter {
 		integration: NewGormIntegrationRepo(db),
 		mcpServer:   NewGormMCPServerRepo(db),
 		skill:       NewGormSkillRepo(db),
+		chatSession: NewChatSessionRepo(db),
+		chatMessage: NewChatMessageRepo(db),
 	}
 }
 
@@ -78,4 +84,14 @@ func (e *entry) MCPServer() MCPServerRepoInter {
 // Skill returns the Skill repository
 func (e *entry) Skill() SkillRepoInter {
 	return e.skill
+}
+
+// ChatSession returns the chat session repository
+func (e *entry) ChatSession() ChatSessionRepoInter {
+	return e.chatSession
+}
+
+// ChatMessage returns the chat message repository
+func (e *entry) ChatMessage() ChatMessageRepoInter {
+	return e.chatMessage
 }

@@ -264,4 +264,73 @@ export const workflowApi = {
       { method: "DELETE" }
     );
   },
+
+  async chat(workflowId: string, input: string, mode: string = 'text', signal?: AbortSignal, sessionId?: string): Promise<ReadableStream<Uint8Array>> {
+    const workspaceId = getWorkspaceId();
+    const body: Record<string, unknown> = mode === 'json' ? JSON.parse(input) : { input };
+
+    let url = `${API_BASE_URL}/api/workflow/${workflowId}/chat?mode=${mode}`;
+    if (sessionId) {
+      url += `&sessionId=${sessionId}`;
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(workspaceId ? { 'X-Workspace-Id': workspaceId } : {}),
+      },
+      body: JSON.stringify(body),
+      signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.body!;
+  },
+
+  // Chat session APIs
+  listChatSessions(workflowId: string): Promise<ChatSession[]> {
+    return request<ChatSession[]>(`/api/workflow/${workflowId}/sessions`);
+  },
+
+  createChatSession(workflowId: string, title?: string): Promise<ChatSession> {
+    return request<ChatSession>(`/api/workflow/${workflowId}/sessions`, {
+      method: 'POST',
+      body: JSON.stringify({ title: title || 'New Chat' }),
+    });
+  },
+
+  getChatSession(workflowId: string, sessionId: string): Promise<ChatSession> {
+    return request<ChatSession>(`/api/workflow/${workflowId}/sessions/${sessionId}`);
+  },
+
+  deleteChatSession(workflowId: string, sessionId: string): Promise<void> {
+    return request<void>(`/api/workflow/${workflowId}/sessions/${sessionId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  getChatMessages(workflowId: string, sessionId: string): Promise<ChatMessage[]> {
+    return request<ChatMessage[]>(`/api/workflow/${workflowId}/sessions/${sessionId}/messages`);
+  },
 };
+
+export interface ChatSession {
+  id: string;
+  workflowId: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  sessionId: string;
+  role: 'user' | 'assistant';
+  content: string;
+  thinking?: string;
+  createdAt: string;
+}

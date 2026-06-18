@@ -22,6 +22,9 @@ import {
   ArrowLeft,
   PanelTop,
   PanelTopClose,
+  Lock,
+  Unlock,
+  MessageSquare,
 } from "lucide-react";
 import { isNavHidden, toggleNav } from "@/lib/nav-toggle";
 import type { WorkflowNode, WorkflowNodeType } from "@/lib/workflow-types";
@@ -47,6 +50,10 @@ interface WorkflowToolbarProps {
   showOutput: boolean;
   showAddNode: boolean;
   onToggleAddNode: (buttonRect?: DOMRect) => void;
+  isLocked: boolean;
+  onToggleLock: () => void;
+  chatMode: boolean;
+  onToggleChatMode: () => void;
 }
 
 function NavToggleButton() {
@@ -130,6 +137,10 @@ export function WorkflowToolbar({
   showOutput,
   showAddNode,
   onToggleAddNode,
+  isLocked,
+  onToggleLock,
+  chatMode,
+  onToggleChatMode,
 }: WorkflowToolbarProps) {
   const router = useRouter();
 
@@ -164,6 +175,26 @@ export function WorkflowToolbar({
 
           {/* Action button groups */}
           <div className="flex items-center gap-2">
+          {/* Lock/Unlock */}
+          <ButtonGroup>
+            <IconButton
+              icon={isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+              onClick={onToggleLock}
+              title={isLocked ? "Unlock to edit" : "Lock workflow"}
+              active={!isLocked}
+            />
+          </ButtonGroup>
+
+          {/* Chat Mode Toggle */}
+          <ButtonGroup>
+            <IconButton
+              icon={<MessageSquare className="w-4 h-4" />}
+              onClick={onToggleChatMode}
+              title={chatMode ? "Switch to editor mode" : "Switch to chat mode"}
+              active={chatMode}
+            />
+          </ButtonGroup>
+
           {/* Add Node */}
           <div className="relative">
             <ButtonGroup>
@@ -176,6 +207,7 @@ export function WorkflowToolbar({
                 }}
                 title="Add node"
                 active={showAddNode}
+                disabled={isLocked}
               />
             </ButtonGroup>
           </div>
@@ -186,6 +218,7 @@ export function WorkflowToolbar({
               icon={<Sparkles className="w-4 h-4" />}
               onClick={onAutoLayout}
               title="Auto layout"
+              disabled={isLocked}
             />
           </ButtonGroup>
 
@@ -195,7 +228,7 @@ export function WorkflowToolbar({
               icon={isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               onClick={onSave}
               title="Save workflow"
-              disabled={isSaving}
+              disabled={isSaving || isLocked}
             />
           </ButtonGroup>
 

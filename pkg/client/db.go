@@ -48,6 +48,8 @@ func NewDBClient(dbcfg config.Database) *gorm.DB {
 		&models.WorkflowVersion{},
 		&models.MCPServer{},
 		&models.Skill{},
+		&models.ChatSession{},
+		&models.ChatMessage{},
 	)
 	if err != nil {
 		logc.Error(context.Background(), err.Error())

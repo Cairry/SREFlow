@@ -1109,3 +1109,92 @@ func (s *NewWorkflowService) DeleteRunHistory(executionId string) (data interfac
 		"executionId": executionId,
 	}, nil
 }
+
+// ExecuteSyncWithStream 同步执行工作流并通过 channel 返回流式事件
+func (s *NewWorkflowService) ExecuteSyncWithStream(req interface{}) (chan *workflow.StreamStyleEvent, string, error) {
+	r := req.(*types.RequestWorkflowExecute)
+
+	// 从数据库加载工作流
+	wf, err := s.workflowRepo.GetByID(r.WorkflowId)
+	if err != nil {
+		return nil, "", fmt.Errorf("workflow not found: %s", r.WorkflowId)
+	}
+
+	// 将 input 参数注入到 Start 节点
+	if err := injectStartNodeInput(wf, r.Input, r.Mode, r.RawBody); err != nil {
+		return nil, "", fmt.Errorf("bad request: %w", err)
+	}
+
+	// 创建执行记录
+	execution := &models.WorkflowExecution{
+		ID:             "chat-" + tools.RandId(),
+		WorkflowID:     wf.ID,
+		WorkflowName:   wf.Name,
+		Status:         "pending",
+		StartedAt:      time.Now().Unix(),
+		NodeResults:    make(map[string]*models.NodeResult),
+		Variables:      make(map[string]any),
+		RunningNodes:   []string{},
+		CompletedNodes: []string{},
+		FailedNodes:    []string{},
+	}
+
+	// 注册 SSE 事件通道
+	eventCh := s.monitor.RegisterStreamChannel(execution.ID)
+
+	// 立即发送 workflow_started 事件，让前端获取 executionID 用于取消
+	startedEvent := workflow.NewStreamStyleEvent("workflow_started", execution.ID, wf.ID, wf.Name)
+	eventCh <- startedEvent
+
+	// 启动同步执行
+	go func() {
+		baseCtx := trace.WithTraceID(context.Background(), r.TraceID)
+		execCtx, cancelExec := context.WithCancel(baseCtx)
+		s.executionCancelFuncs.Store(execution.ID, cancelExec)
+
+		logc.Infof(execCtx, "[WorkflowService] start chat execution workflow %s, execution %s", wf.ID, execution.ID)
+
+		defer func() {
+			if r := recover(); r != nil {
+				s.markExecutionFailed(execution, fmt.Sprintf("panic: %v", r))
+				s.saveExecutionRecord(execution)
+			}
+			s.executionCancelFuncs.Delete(execution.ID)
+			s.monitor.UnregisterStreamChannel(execution.ID)
+		}()
+
+		// 解析工作流拓扑
+		topology, err := s.parser.ParseWorkflowFromModel(wf)
+		if err != nil {
+			logc.Errorf(execCtx, "[WorkflowService] failed to parse workflow %s: %v", wf.ID, err)
+			s.markExecutionFailed(execution, fmt.Sprintf("failed to parse workflow: %v", err))
+			s.saveExecutionRecord(execution)
+			return
+		}
+
+		// 验证工作流
+		registry := s.engine.GetRegistry()
+		if err := s.parser.ValidateWorkflow(topology, registry); err != nil {
+			logc.Errorf(execCtx, "[WorkflowService] workflow validation failed for %s: %v", wf.ID, err)
+			s.markExecutionFailed(execution, fmt.Sprintf("workflow validation failed: %v", err))
+			s.saveExecutionRecord(execution)
+			return
+		}
+
+		// 执行工作流
+		_, executionErr := s.engine.Execute(execCtx, wf, execution)
+		if executionErr != nil {
+			s.markExecutionFailed(execution, fmt.Sprintf("workflow execution failed: %v", executionErr))
+		} else {
+			s.markExecutionCompleted(execution)
+		}
+
+		// 保存执行记录
+		s.saveExecutionRecord(execution)
+
+		// 打印日志
+		printWorkflowLogs(execCtx, execution)
+	}()
+
+	return eventCh, execution.ID, nil
+}
