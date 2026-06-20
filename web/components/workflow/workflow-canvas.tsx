@@ -178,6 +178,7 @@ interface WorkflowCanvasProps {
   onNodeClick?: (node: WorkflowNode) => void;
   onContextMenu?: (position: { x: number; y: number }) => void;
   nodeStatuses?: Map<string, NodeRunStatus>;
+  nodeErrors?: Map<string, string>;
   onStartNodeBlocked?: () => void;
 }
 

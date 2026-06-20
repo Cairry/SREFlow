@@ -157,7 +157,7 @@ func printWorkflowLogs(ctx context.Context, execution *models.WorkflowExecution)
 
 	for nodeID, result := range execution.NodeResults {
 		outputsJSON, _ := json.Marshal(result.Outputs)
-		if result.Error != "" {
+		if result.Error != "" || result.Outputs["error"] != nil {
 			logc.Errorf(ctx, "[Node: %s] Failed, outputs: %s", nodeID, string(outputsJSON))
 		} else {
 			logc.Infof(ctx, "[Node: %s] OK, outputs: %s", nodeID, string(outputsJSON))
@@ -262,7 +262,7 @@ func (s *NewWorkflowService) CancelWorkflowExecution(ctx context.Context, execut
 	}
 
 	// 通过 SSE 通知前端
-	event := workflow.NewStreamStyleEvent("workflow_cancelled", executionID, "", "")
+	event := workflow.NewStreamStyleEvent("cancelled", executionID, "", "")
 	event.Data.Status = "cancelled"
 	if eventCh := s.monitor.GetStreamChannel(executionID); eventCh != nil {
 		eventCh <- event
@@ -841,6 +841,12 @@ func (s *NewWorkflowService) UnregisterStreamChannel(executionId string) {
 	s.monitor.UnregisterStreamChannel(executionId)
 }
 
+// SubscribeExecution 创建独立的事件订阅通道（fan-out），不与主 SSE channel 争抢。
+// 返回事件 channel 和清理函数。
+func (s *NewWorkflowService) SubscribeExecution(executionId string) (chan *workflow.StreamStyleEvent, func()) {
+	return s.monitor.SubscribeExecution(executionId)
+}
+
 // GetExecutionResult 获取执行结果
 func (s *NewWorkflowService) GetExecutionResult(executionId string) (data interface{}, err error) {
 	return s.GetWorkflowExecution(context.Background(), executionId)
@@ -1127,7 +1133,7 @@ func (s *NewWorkflowService) ExecuteSyncWithStream(req interface{}) (chan *workf
 
 	// 创建执行记录
 	execution := &models.WorkflowExecution{
-		ID:             "chat-" + tools.RandId(),
+		ID:             tools.RandId(),
 		WorkflowID:     wf.ID,
 		WorkflowName:   wf.Name,
 		Status:         "pending",
@@ -1142,8 +1148,8 @@ func (s *NewWorkflowService) ExecuteSyncWithStream(req interface{}) (chan *workf
 	// 注册 SSE 事件通道
 	eventCh := s.monitor.RegisterStreamChannel(execution.ID)
 
-	// 立即发送 workflow_started 事件，让前端获取 executionID 用于取消
-	startedEvent := workflow.NewStreamStyleEvent("workflow_started", execution.ID, wf.ID, wf.Name)
+	// 立即发送 started 事件，让前端获取 executionID 用于取消
+	startedEvent := workflow.NewStreamStyleEvent("started", execution.ID, wf.ID, wf.Name)
 	eventCh <- startedEvent
 
 	// 启动同步执行
@@ -1182,8 +1188,8 @@ func (s *NewWorkflowService) ExecuteSyncWithStream(req interface{}) (chan *workf
 		}
 
 		// 执行工作流
-		_, executionErr := s.engine.Execute(execCtx, wf, execution)
-		if executionErr != nil {
+		exec, executionErr := s.engine.Execute(execCtx, wf, execution)
+		if executionErr != nil || exec.Status == "failed" {
 			s.markExecutionFailed(execution, fmt.Sprintf("workflow execution failed: %v", executionErr))
 		} else {
 			s.markExecutionCompleted(execution)

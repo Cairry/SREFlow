@@ -20,6 +20,8 @@ export interface RunHistoryItem {
   workflowName: string;
   status: string;
   finalOutput: string | null;
+  outputs?: Record<string, unknown>;
+  variables?: Record<string, unknown>;
   startedAt: number;
   finishedAt: number | null;
   createdAt: number;
@@ -160,7 +162,7 @@ export const workflowApi = {
     failedNodes: string[];
     totalNodes: number;
   }> {
-    return request(`/api/workflow/executions/${executionId}/status`);
+    return request(`/api/workflow/${executionId}/status`);
   },
 
   getExecution(executionId: string): Promise<{
@@ -172,11 +174,11 @@ export const workflowApi = {
     startedAt: number;
     finishedAt: number | null;
   }> {
-    return request(`/api/workflow/executions/${executionId}`);
+    return request(`/api/workflow/${executionId}`);
   },
 
   cancelExecution(executionId: string): Promise<void> {
-    return request<void>(`/api/workflow/executions/${executionId}/cancel`, {
+    return request<void>(`/api/workflow/${executionId}/cancel`, {
       method: "POST",
     });
   },
@@ -265,11 +267,11 @@ export const workflowApi = {
     );
   },
 
-  async chat(workflowId: string, input: string, mode: string = 'text', signal?: AbortSignal, sessionId?: string): Promise<ReadableStream<Uint8Array>> {
+  async chat(workflowId: string, input: string, mode: string = 'text', signal?: AbortSignal, sessionId?: string): Promise<{ executionId: string }> {
     const workspaceId = getWorkspaceId();
     const body: Record<string, unknown> = mode === 'json' ? JSON.parse(input) : { input };
 
-    let url = `${API_BASE_URL}/api/workflow/${workflowId}/chat?mode=${mode}`;
+    let url = `${API_BASE_URL}/api/workflow/${workflowId}/execute?mode=${mode}`;
     if (sessionId) {
       url += `&sessionId=${sessionId}`;
     }
@@ -288,33 +290,34 @@ export const workflowApi = {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    return response.body!;
+    const result = await response.json();
+    return result.data;
   },
 
   // Chat session APIs
   listChatSessions(workflowId: string): Promise<ChatSession[]> {
-    return request<ChatSession[]>(`/api/workflow/${workflowId}/sessions`);
+    return request<ChatSession[]>(`/api/chat/${workflowId}/sessions`);
   },
 
   createChatSession(workflowId: string, title?: string): Promise<ChatSession> {
-    return request<ChatSession>(`/api/workflow/${workflowId}/sessions`, {
+    return request<ChatSession>(`/api/chat/${workflowId}/sessions`, {
       method: 'POST',
       body: JSON.stringify({ title: title || 'New Chat' }),
     });
   },
 
   getChatSession(workflowId: string, sessionId: string): Promise<ChatSession> {
-    return request<ChatSession>(`/api/workflow/${workflowId}/sessions/${sessionId}`);
+    return request<ChatSession>(`/api/chat/${workflowId}/sessions/${sessionId}`);
   },
 
   deleteChatSession(workflowId: string, sessionId: string): Promise<void> {
-    return request<void>(`/api/workflow/${workflowId}/sessions/${sessionId}`, {
+    return request<void>(`/api/chat/${workflowId}/sessions/${sessionId}`, {
       method: 'DELETE',
     });
   },
 
   getChatMessages(workflowId: string, sessionId: string): Promise<ChatMessage[]> {
-    return request<ChatMessage[]>(`/api/workflow/${workflowId}/sessions/${sessionId}/messages`);
+    return request<ChatMessage[]>(`/api/chat/${workflowId}/sessions/${sessionId}/messages`);
   },
 };
 

@@ -47,18 +47,18 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
 
 // 获取执行状态 curl 示例
 function getStatusCurl(execId: string, baseUrl: string, wsId: string) {
-  return `curl -X GET "${baseUrl}/api/workflow/executions/${execId}/status" \\
+  return `curl -X GET "${baseUrl}/api/workflow/${execId}/status" \\
   -H "X-Workspace-Id: ${wsId}"`;
 }
 
 // SSE stream curl 示例
 function getSseCurl(execId: string, baseUrl: string, wsId: string) {
-  return `curl -N "${baseUrl}/api/workflow/executions/${execId}/stream?workspaceId=${wsId}"`;
+  return `curl -N "${baseUrl}/api/workflow/${execId}/stream?workspaceId=${wsId}"`;
 }
 
 // 获取执行结果 curl
 function getResultCurl(execId: string, baseUrl: string, wsId: string) {
-  return `curl -X GET "${baseUrl}/api/workflow/executions/${execId}" \\
+  return `curl -X GET "${baseUrl}/api/workflow/${execId}" \\
   -H "X-Workspace-Id: ${wsId}"`;
 }
 
@@ -204,7 +204,7 @@ export function ApiCallDialog({
               GET
             </span>
             <code className="text-xs text-workflow-text-muted font-mono">
-              {baseUrl}/api/workflow/executions/&#123;executionId&#125;/status
+              {baseUrl}/api/workflow/&#123;executionId&#125;/status
             </code>
           </div>
           <div className="border border-workflow-border rounded-lg p-3 font-mono text-xs bg-black/30 space-y-1 text-workflow-text-muted">
@@ -240,7 +240,7 @@ export function ApiCallDialog({
               GET
             </span>
             <code className="text-xs text-workflow-text-muted font-mono">
-              {baseUrl}/api/workflow/executions/&#123;executionId&#125;
+              {baseUrl}/api/workflow/&#123;executionId&#125;
             </code>
           </div>
           <div className="border border-workflow-border rounded-lg p-3 font-mono text-xs bg-black/30 space-y-1 text-workflow-text-muted">
@@ -273,7 +273,7 @@ export function ApiCallDialog({
               GET
             </span>
             <code className="text-xs text-workflow-text-muted font-mono">
-              {baseUrl}/api/workflow/executions/&#123;executionId&#125;/stream
+              {baseUrl}/api/workflow/&#123;executionId&#125;/stream
             </code>
           </div>
           <div className="border border-workflow-border rounded-lg overflow-hidden">
@@ -287,13 +287,14 @@ export function ApiCallDialog({
               <tbody className="divide-y divide-workflow-border/50">
                 <tr><td className="px-3 py-2 text-violet-400">test_connection</td><td className="px-3 py-2 text-workflow-text-muted">连接测试</td></tr>
                 <tr><td className="px-3 py-2 text-violet-400">heartbeat</td><td className="px-3 py-2 text-workflow-text-muted">心跳保活 (每 10s)</td></tr>
-                <tr><td className="px-3 py-2 text-violet-400">running</td><td className="px-3 py-2 text-workflow-text-muted">工作流开始运行</td></tr>
-                <tr><td className="px-3 py-2 text-violet-400">node_started</td><td className="px-3 py-2 text-workflow-text-muted">节点开始执行</td></tr>
-                <tr><td className="px-3 py-2 text-violet-400">node_completed</td><td className="px-3 py-2 text-workflow-text-muted">节点执行完成</td></tr>
-                <tr><td className="px-3 py-2 text-violet-400">node_failed</td><td className="px-3 py-2 text-workflow-text-muted">节点执行失败</td></tr>
-                <tr><td className="px-3 py-2 text-violet-400">workflow_completed</td><td className="px-3 py-2 text-workflow-text-muted">工作流执行完成</td></tr>
-                <tr><td className="px-3 py-2 text-violet-400">workflow_failed</td><td className="px-3 py-2 text-workflow-text-muted">工作流执行失败</td></tr>
-                <tr><td className="px-3 py-2 text-violet-400">workflow_cancelled</td><td className="px-3 py-2 text-workflow-text-muted">工作流已取消</td></tr>
+                <tr><td className="px-3 py-2 text-violet-400">started</td><td className="px-3 py-2 text-workflow-text-muted">工作流开始执行</td></tr>
+                <tr><td className="px-3 py-2 text-violet-400">running</td><td className="px-3 py-2 text-workflow-text-muted">工作流运行中（含节点状态快照）</td></tr>
+                <tr><td className="px-3 py-2 text-violet-400">thinking</td><td className="px-3 py-2 text-workflow-text-muted">节点开始执行</td></tr>
+                <tr><td className="px-3 py-2 text-violet-400">thinked</td><td className="px-3 py-2 text-workflow-text-muted">节点执行完成（含输出结果）</td></tr>
+                <tr><td className="px-3 py-2 text-violet-400">reply</td><td className="px-3 py-2 text-workflow-text-muted">Reply 节点输出（最终回复）</td></tr>
+                <tr><td className="px-3 py-2 text-violet-400">completed</td><td className="px-3 py-2 text-workflow-text-muted">工作流执行完成</td></tr>
+                <tr><td className="px-3 py-2 text-violet-400">failed</td><td className="px-3 py-2 text-workflow-text-muted">工作流执行失败</td></tr>
+                <tr><td className="px-3 py-2 text-violet-400">cancelled</td><td className="px-3 py-2 text-workflow-text-muted">工作流已取消</td></tr>
               </tbody>
             </table>
           </div>

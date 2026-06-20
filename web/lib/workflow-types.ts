@@ -199,7 +199,7 @@ export type NodeRunStatus = "idle" | "pending" | "running" | "completed" | "fail
 
 // SSE 事件类型
 export interface ExecutionSSEEvent {
-  type: "workflow_started" | "node_started" | "node_completed" | "node_failed" | "workflow_completed" | "workflow_failed";
+  type: "started" | "running" | "thinking" | "thinked" | "reply" | "completed" | "failed" | "cancelled";
   executionId: string;
   nodeId?: string;
   nodeType?: string;

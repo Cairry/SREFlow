@@ -37,7 +37,6 @@ interface WorkflowToolbarProps {
   onSave: () => void;
   onNew: () => void;
   onClear: () => void;
-  onOpenHistory: () => void;
   onOpenVersionHistory: () => void;
   onSelectTemplate: (nodes: WorkflowNode[], edges: Edge[], name: string) => void;
   onAddNode: (nodeType: WorkflowNodeType, mcpData?: { serverId: string; serverName: string; toolName: string; description: string }) => void;
@@ -125,7 +124,6 @@ export function WorkflowToolbar({
   onExecute,
   onStop,
   onSave,
-  onOpenHistory,
   onOpenVersionHistory,
   onAddNode,
   onAutoLayout,
@@ -162,6 +160,18 @@ export function WorkflowToolbar({
 
           <div className="h-5 w-px bg-workflow-border shrink-0" />
 
+          <button
+            type="button"
+            onClick={onToggleChatMode}
+            className="flex items-center gap-1.5 text-workflow-text-muted hover:text-workflow-text transition-colors duration-200 shrink-0"
+            title="To Chat"
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span className="font-mono text-xs">Chat</span>
+          </button>
+
+          <div className="h-5 w-px bg-workflow-border shrink-0" />
+
           {/* Workflow name display */}
           <div className="flex items-center gap-2 shrink-0">
             <Workflow className="w-4 h-4 text-workflow-text-muted" />
@@ -182,16 +192,6 @@ export function WorkflowToolbar({
               onClick={onToggleLock}
               title={isLocked ? "Unlock to edit" : "Lock workflow"}
               active={!isLocked}
-            />
-          </ButtonGroup>
-
-          {/* Chat Mode Toggle */}
-          <ButtonGroup>
-            <IconButton
-              icon={<MessageSquare className="w-4 h-4" />}
-              onClick={onToggleChatMode}
-              title={chatMode ? "Switch to editor mode" : "Switch to chat mode"}
-              active={chatMode}
             />
           </ButtonGroup>
 
@@ -290,11 +290,6 @@ export function WorkflowToolbar({
                   </button>
                 )}
               </div>
-              <IconButton
-                icon={<Clock className="w-4 h-4" />}
-                onClick={onOpenHistory}
-                title="Run history"
-              />
             </ButtonGroup>
           </div>
 

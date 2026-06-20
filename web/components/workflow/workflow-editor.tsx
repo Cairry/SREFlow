@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -15,21 +15,22 @@ import {
 } from "@xyflow/react";
 
 import type { WorkflowNodeType, WorkflowNode, NodeRunStatus, ExecutionSSEEvent, WorkflowExecution, ExecutionResult } from "@/lib/workflow-types";
+import type { WorkflowExecutionStatus } from "./execution-log-panel";
 import { generateNodeId } from "@/lib/node-id-generator";
 import { adaptSnapshotToNodeStatuses } from "@/lib/state-adapter";
 import { WorkflowCanvas, defaultNodeData } from "./workflow-canvas";
 import { WorkflowToolbar } from "./workflow-toolbar";
-import { OutputPanel } from "./output-panel";
+import { ExecutionLogPanel } from "./execution-log-panel";
 import { useToast } from "@/hooks/use-toast";
 import { downloadFile } from "@/lib/utils";
 import { X } from "lucide-react";
 import { LoadWorkflowDialog } from "./load-workflow-dialog";
 import { NodeEditPanel } from "./node-edit-panel";
-import { RunHistoryDialog, RunHistoryContent, RunDetails } from "./run-history-dialog";
 import { WorkflowVersionHistoryDialog } from "./workflow-version-history-dialog";
 import { ApiCallDialog } from "./api-call-dialog";
 import { AddNodeDialog } from "./add-node-dialog";
-import { workflowApi, API_BASE_URL, WorkflowVersion } from "@/lib/api/workflow";
+import { workflowApi, WorkflowVersion } from "@/lib/api/workflow";
+import { connectSSEStream, SSEEvent } from "@/lib/sse";
 
 // Empty workflow template with default Start node
 const getInitialNodes = (): WorkflowNode[] => [
@@ -112,9 +113,9 @@ function WorkflowEditorInner({ workflowId: urlWorkflowId }: { workflowId?: Promi
   // 组件卸载时清理 SSE 连接
   useEffect(() => {
     return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
+      if (sseControllerRef.current) {
+        sseControllerRef.current.abort();
+        sseControllerRef.current = null;
       }
     };
   }, []);
@@ -150,30 +151,24 @@ function WorkflowEditorInner({ workflowId: urlWorkflowId }: { workflowId?: Promi
   const [nodeResults, setNodeResults] = useState<ExecutionResult[]>([]);
   const [showOutput, setShowOutput] = useState(false);
   const [showLoadDialog, setShowLoadDialog] = useState(false);
-  const [showHistoryDialog, setShowHistoryDialog] = useState(false);
   const [selectedNode, setSelectedNode] = useState<WorkflowNode | null>(null);
-  const [showTemplatesDialog, setShowTemplatesDialog] = useState(false); // Declare showTemplatesDialog
   const [nodeStatuses, setNodeStatuses] = useState<Map<string, NodeRunStatus>>(new Map()); // 节点状态跟踪
   const [isStopping, setIsStopping] = useState(false);
-  // SSE EventSource 引用，用于清理
-  const eventSourceRef = React.useRef<EventSource | null>(null);
+  // SSE AbortController 引用，用于取消流式连接
+  const sseControllerRef = useRef<AbortController | null>(null);
   // SSE 收集的节点输出
-  const nodeResultsRef = React.useRef<ExecutionResult[]>([]);
-
-  // 侧边栏状态：'progress' | 'history' | null
-  const [sidebarMode, setSidebarMode] = useState<'progress' | 'history' | null>(null);
+  const nodeResultsRef = useRef<ExecutionResult[]>([]);
+  // Execution status for the log panel (only 4 states: running, completed, failed, cancelled)
+  const [executionStatus, setExecutionStatus] = useState<WorkflowExecutionStatus | null>(null);
 
   // API 调用弹窗状态
   const [showApiCallDialog, setShowApiCallDialog] = useState(false);
   const [showVersionHistoryDialog, setShowVersionHistoryDialog] = useState(false);
   const [versionRefreshTrigger, setVersionRefreshTrigger] = useState(0);
 
-  // Run History 详情状态
-  const [selectedRun, setSelectedRun] = useState<any>(null);
-
   // Add Node 弹窗状态（右键 + 工具栏共享）
   const [showAddNode, setShowAddNode] = useState(false);
-  const addNodePositionRef = React.useRef<{ x: number; y: number } | null>(null);
+  const addNodePositionRef = useRef<{ x: number; y: number } | null>(null);
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -350,271 +345,226 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
   }, [nodes, edges, setNodes]);
 
   // 通过 SSE 实时接收节点状态更新（主路径，失败时降级到轮询）
-  // 注意：SSE named events 必须用 addEventListener，onmessage 只接收无名事件
   const connectSSE = useCallback((executionId: string) => {
     console.log('[SSE] Connecting for execution:', executionId);
     setCurrentExecutionId(executionId);
     nodeResultsRef.current = [];
 
-    const workspaceId = localStorage.getItem("flowforge-current-workspace-id");
-    const sseUrl = `${API_BASE_URL}/api/workflow/executions/${executionId}/stream${workspaceId ? `?workspaceId=${workspaceId}` : ""}`;
-    const eventSource = new EventSource(sseUrl);
-    eventSourceRef.current = eventSource;
-
-    eventSource.onopen = () => {};
-
     // 辅助：更新节点状态为 running
-    const handleNodeStarted = (e: MessageEvent) => {
-      try {
-        const eventData = JSON.parse(e.data);
-        if (eventData.node?.id) {
-          setNodeStatuses(prev => {
-            const next = new Map(prev);
-            next.set(eventData.node.id, 'running');
-            return next;
-          });
-        }
-      } catch (err) {
-        console.error('[SSE] node_started parse error:', err);
+    const handleNodeStarted = (event: SSEEvent) => {
+      const nodeId = event.node?.id;
+      if (nodeId) {
+        setNodeStatuses(prev => {
+          const next = new Map(prev);
+          next.set(nodeId, 'running');
+          return next;
+        });
       }
     };
 
     // 辅助：更新节点状态为 completed，收集输出
-    const handleNodeCompleted = (e: MessageEvent) => {
-      try {
-        const eventData = JSON.parse(e.data);
-        const node = nodes.find(n => n.id === eventData.node?.id);
-        if (eventData.node?.id) {
-          // 更新节点状态为 completed
-          setNodeStatuses(prev => {
-            const next = new Map(prev);
-            next.set(eventData.node.id, 'completed');
-            return next;
-          });
-          
-          // 去重：回放缓冲事件与实时通道可能有重叠
-          if (nodeResultsRef.current.some(r => r.nodeId === eventData.node.id)) return;
-          
-          const outputs = eventData.node.outputs || {};
-          const outputValue = extractOutputValue(outputs);
-          nodeResultsRef.current.push({
-            nodeId: eventData.node.id,
-            nodeType: toWorkflowNodeType(node?.type || "unknown"),
-            output: outputValue as string | null,
-            outputs: outputs as Record<string, unknown>,
-            timestamp: new Date(),
-          });
-          // 实时更新节点结果，让 OutputPanel 立即显示该节点输出
-          setNodeResults([...nodeResultsRef.current]);
-          // Output 节点完成时自动触发文件下载
-          if (node?.type === "Output") {
-            tryAutoDownloadOutput(nodes, nodeResultsRef.current);
-          }
-        }
-      } catch (err) {
-        console.error('[SSE] node_completed parse error:', err);
+    const handleNodeCompleted = (event: SSEEvent) => {
+      const nodeId = event.node?.id;
+      const nodeDef = nodes.find(n => n.id === nodeId);
+      if (nodeId) {
+        setNodeStatuses(prev => {
+          const next = new Map(prev);
+          next.set(nodeId, 'completed');
+          return next;
+        });
+
+        // 去重：回放缓冲事件与实时通道可能有重叠
+        if (nodeResultsRef.current.some(r => r.nodeId === nodeId)) return;
+
+        const outputs = event.node?.outputs || {};
+        const outputValue = extractOutputValue(outputs);
+        nodeResultsRef.current.push({
+          nodeId,
+          nodeType: toWorkflowNodeType(nodeDef?.type || "unknown"),
+          output: outputValue as string | null,
+          outputs: outputs as Record<string, unknown>,
+          timestamp: new Date(),
+        });
+        setNodeResults([...nodeResultsRef.current]);
       }
     };
 
-    // 辅助：更新节点状态为 failed
-    const handleNodeFailed = (e: MessageEvent) => {
-      try {
-        const eventData = JSON.parse(e.data);
-        if (eventData.node?.id) {
-          // 更新节点状态为 failed
-          setNodeStatuses(prev => {
-            const next = new Map(prev);
-            next.set(eventData.node?.id, 'failed');
-            return next;
-          });
-          
-          // 去重：回放缓冲事件与实时通道可能有重叠
-          if (nodeResultsRef.current.some(r => r.nodeId === eventData.node?.id)) return;
-          
-          const node = nodes.find(n => n.id === eventData.node?.id);
-          nodeResultsRef.current.push({
-            nodeId: eventData.node?.id,
-            nodeType: toWorkflowNodeType(node?.type || "unknown"),
-            output: null,
-            error: eventData.node?.error,
-            timestamp: new Date(),
-          });
-          // 实时更新节点结果，让 OutputPanel 立即显示该节点错误
-          setNodeResults([...nodeResultsRef.current]);
-        }
-      } catch (err) {
-        console.error('[SSE] node_failed parse error:', err);
+    // 辅助：节点执行失败，标记 failed 状态并从 outputs 读取 error
+    const handleNodeFailed = (event: SSEEvent) => {
+      const nodeId = event.node?.id;
+      const nodeDef = nodes.find(n => n.id === nodeId);
+      if (nodeId) {
+        setNodeStatuses(prev => {
+          const next = new Map(prev);
+          next.set(nodeId, 'failed');
+          return next;
+        });
+
+        // 去重
+        if (nodeResultsRef.current.some(r => r.nodeId === nodeId)) return;
+
+        const outputs = event.node?.outputs || {};
+        const error = (outputs as Record<string, unknown>).error as string
+          || event.node?.error
+          || event.data?.error;
+        nodeResultsRef.current.push({
+          nodeId,
+          nodeType: toWorkflowNodeType(nodeDef?.type || "unknown"),
+          output: error || null,
+          outputs: outputs as Record<string, unknown>,
+          error,
+          timestamp: new Date(),
+        });
+        setNodeResults([...nodeResultsRef.current]);
+        return; // 节点级 failed，不触发工作流结束
       }
     };
 
-    // 辅助：更新节点状态为 skipped（孤立节点）
-    const handleNodeSkipped = (e: MessageEvent) => {
-      try {
-        const eventData = JSON.parse(e.data);
-        if (eventData.node?.id) {
-          setNodeStatuses(prev => {
-            const next = new Map(prev);
-            next.set(eventData.node.id, 'skipped');
-            return next;
-          });
-        }
-      } catch (err) {
-        console.error('[SSE] node_skipped parse error:', err);
+    // 辅助：节点被跳过，标记 skipped 状态
+    const handleNodeSkipped = (event: SSEEvent) => {
+      const nodeId = event.node?.id;
+      if (nodeId) {
+        setNodeStatuses(prev => {
+          const next = new Map(prev);
+          next.set(nodeId, 'skipped');
+          return next;
+        });
       }
     };
 
     // 初始化所有节点为 pending，同时应用后端快照中的 node_states（如 skipped）
-    const handleRunning = (e: MessageEvent) => {
-      try {
-        const eventData = JSON.parse(e.data);
-        const statuses = new Map<string, NodeRunStatus>();
-        nodes.forEach(n => statuses.set(n.id, 'pending'));
+    const handleRunning = (event: SSEEvent) => {
+      const statuses = new Map<string, NodeRunStatus>();
+      nodes.forEach(n => statuses.set(n.id, 'pending'));
 
-        // 如果后端发送了 node_states 快照（包含 skipped 等状态），优先使用
-        if (eventData.data?.node_states) {
-          Object.entries(eventData.data.node_states).forEach(([nodeId, state]) => {
-            statuses.set(nodeId, mapBackendToFrontend(state as string));
-          });
-        }
-
-        setNodeStatuses(statuses);
-      } catch (err) {
-        console.error('[SSE] running parse error:', err);
+      if (event.data?.node_states) {
+        Object.entries(event.data.node_states).forEach(([nodeId, state]) => {
+          statuses.set(nodeId, mapBackendToFrontend(state as string));
+        });
       }
+
+      setNodeStatuses(statuses);
     };
 
     // 工作流结束，收尾
-    const handleWorkflowDone = (e: MessageEvent) => {
-      try {
-        const eventData = JSON.parse(e.data);
-        const evt = eventData.event;
-        const isCancelled = evt === "workflow_cancelled";
-        const isCompleted = evt === "workflow_completed";
-        const finalStatus = isCancelled ? 'cancelled' : isCompleted ? 'completed' : 'failed';
-        console.log('[SSE] workflow done:', evt, eventData);
-        console.log('[SSE] workflow done - node_states:', eventData.data?.node_states);
+    const handleWorkflowDone = (event: SSEEvent) => {
+      const evt = event.event;
+      const isCancelled = evt === "cancelled";
+      const isCompleted = evt === "completed";
+      const finalStatus = isCancelled ? 'cancelled' : isCompleted ? 'completed' : 'failed';
+      console.log('[SSE] workflow done:', evt, event);
+      console.log('[SSE] workflow done - node_states:', event.data?.node_states);
 
-        if (eventData.data?.node_states) {
-          // 正常完成/失败：从 node_states 快照刷新状态，始终保护 skipped 节点
-          setNodeStatuses(prev => {
-            const statusMap = new Map(prev); // 保留之前的状态（如 skipped）
-            Object.entries(eventData.data.node_states).forEach(([nodeId, state]) => {
-              // 始终保护 skipped 节点，不被后端快照覆盖
-              const existing = statusMap.get(nodeId);
-              if (existing === 'skipped') {
-                return; // 跳过，不覆盖
-              }
-              statusMap.set(nodeId, mapBackendToFrontend(state as string));
-            });
-            // 补充未在快照中的节点
-            nodes.forEach(n => {
-              if (!statusMap.has(n.id)) {
-                statusMap.set(n.id, finalStatus === 'completed' ? 'completed' : 'idle');
-              }
-            });
-            return statusMap;
+      if (event.data?.node_states) {
+        setNodeStatuses(prev => {
+          const statusMap = new Map(prev);
+          Object.entries(event.data.node_states!).forEach(([nodeId, state]) => {
+            const existing = statusMap.get(nodeId);
+            if (existing === 'skipped') return;
+            statusMap.set(nodeId, mapBackendToFrontend(state as string));
           });
-        } else if (isCancelled) {
-          // 取消：把当前所有 running/pending 节点标记为 cancelled
-          setNodeStatuses(prev => {
-            const next = new Map(prev);
-            let changed = false;
-            next.forEach((status, nodeId) => {
-              if (status === 'running' || status === 'pending') {
-                next.set(nodeId, 'cancelled');
-                changed = true;
-              }
-            });
-            // 未出现在 nodeStatuses 的节点也设为 cancelled
-            nodes.forEach(n => {
-              if (!next.has(n.id)) {
-                next.set(n.id, 'cancelled');
-                changed = true;
-              }
-            });
-            return changed ? next : prev;
-          });
-        } else {
-          // 没有快照且非取消：保护已有的 skipped 节点，把 running 刷新为 completed
-          setNodeStatuses(prev => {
-            const next = new Map(prev);
-            let changed = false;
-            next.forEach((status, nodeId) => {
-              if (status === 'running') {
-                next.set(nodeId, 'completed');
-                changed = true;
-              }
-            });
-            // 补充未在 map 中的节点
-            nodes.forEach(n => {
-              if (!next.has(n.id)) {
-                next.set(n.id, finalStatus === 'completed' ? 'completed' : 'idle');
-              }
-            });
-            return changed ? next : prev;
-          });
-        }
-
-        let finalOutput = "";
-        const outputNode = nodeResultsRef.current.find(r =>
-          nodes.find(n => n.id === r.nodeId && n.type === "Output")
-        );
-        if (outputNode) finalOutput = outputNode.output || "";
-
-        setExecution({
-          id: executionId,
-          workflowId: workflowId || "",
-          status: finalStatus,
-          results: nodeResultsRef.current,
-          finalOutput,
-          startedAt: new Date(),
-          completedAt: new Date(),
-        });
-        setIsExecuting(false);
-        setIsStopping(false);
-        setCurrentExecutionId(null);
-
-        if (isCancelled) {
-          toast({ title: "Stopped", description: "Workflow execution was cancelled", variant: "destructive" });
-        } else if (isCompleted) {
-          toast({ title: "Completed", description: "Workflow finished successfully" });
-          // Auto-download output file after successful completion
-          if (outputNode && outputNode.outputs) {
-            const content = (outputNode.outputs.output as string) || outputNode.output || "";
-            const filename = (outputNode.outputs.filename as string) || "output.md";
-            if (content) {
-              downloadFile(content, filename.replace(/\.md$/, ""), "md", false);
+          nodes.forEach(n => {
+            if (!statusMap.has(n.id)) {
+              statusMap.set(n.id, finalStatus === 'completed' ? 'completed' : 'idle');
             }
-          }
-        } else {
-          toast({ title: "Failed", description: "Workflow execution failed", variant: "destructive" });
-        }
-
-        eventSource.close();
-        eventSourceRef.current = null;
-      } catch (err) {
-        console.error('[SSE] workflow done parse error:', err);
+          });
+          return statusMap;
+        });
+      } else if (isCancelled) {
+        setNodeStatuses(prev => {
+          const next = new Map(prev);
+          let changed = false;
+          next.forEach((status, nodeId) => {
+            if (status === 'running' || status === 'pending') {
+              next.set(nodeId, 'cancelled');
+              changed = true;
+            }
+          });
+          nodes.forEach(n => {
+            if (!next.has(n.id)) {
+              next.set(n.id, 'cancelled');
+              changed = true;
+            }
+          });
+          return changed ? next : prev;
+        });
+      } else {
+        setNodeStatuses(prev => {
+          const next = new Map(prev);
+          let changed = false;
+          next.forEach((status, nodeId) => {
+            if (status === 'running') {
+              // 工作流失败时，仍在运行的节点标记为 failed
+              next.set(nodeId, finalStatus === 'failed' ? 'failed' : 'completed');
+              changed = true;
+            }
+          });
+          nodes.forEach(n => {
+            if (!next.has(n.id)) {
+              next.set(n.id, finalStatus === 'completed' ? 'completed' : 'idle');
+            }
+          });
+          return changed ? next : prev;
+        });
       }
+
+      let finalOutput = "";
+      const outputNode = nodeResultsRef.current.find(r =>
+        nodes.find(n => n.id === r.nodeId && n.type === "Output")
+      );
+      if (outputNode) finalOutput = outputNode.output || "";
+
+      setExecution({
+        id: executionId,
+        workflowId: workflowId || "",
+        status: finalStatus,
+        results: nodeResultsRef.current,
+        finalOutput,
+        startedAt: new Date(),
+        completedAt: new Date(),
+      });
+      setIsExecuting(false);
+      setIsStopping(false);
+      setCurrentExecutionId(null);
+      setExecutionStatus(finalStatus);
+
+      if (isCancelled) {
+        toast({ title: "Stopped", description: "Workflow execution was cancelled", variant: "destructive" });
+      } else if (isCompleted) {
+        toast({ title: "Completed", description: "Workflow finished successfully" });
+        if (outputNode && outputNode.outputs) {
+          const content = (outputNode.outputs.output as string) || outputNode.output || "";
+          const filename = (outputNode.outputs.filename as string) || "output.md";
+          if (content) {
+            downloadFile(content, filename.replace(/\.md$/, ""), "md", false);
+          }
+        }
+      }
+
+      sseControllerRef.current = null;
     };
 
-    // 为每个命名事件注册专用的 listener
-    eventSource.addEventListener('running', handleRunning);
-    eventSource.addEventListener('node_started', handleNodeStarted);
-    eventSource.addEventListener('node_completed', handleNodeCompleted);
-    eventSource.addEventListener('node_failed', handleNodeFailed);
-    eventSource.addEventListener('node_skipped', handleNodeSkipped);
-    // thinking and reply events indicate node completion
-    eventSource.addEventListener('thinking', handleNodeCompleted);
-    eventSource.addEventListener('reply', handleNodeCompleted);
-    eventSource.addEventListener('workflow_completed', handleWorkflowDone);
-    eventSource.addEventListener('workflow_failed', handleWorkflowDone);
-    eventSource.addEventListener('workflow_cancelled', handleWorkflowDone);
-
-    eventSource.onerror = () => {
-      eventSource.close();
-      eventSourceRef.current = null;
-      fallbackPoll(executionId);
-    };
+    sseControllerRef.current = connectSSEStream(
+      executionId,
+      {
+        on: {
+          started: handleRunning,
+          running: handleRunning,
+          // thinking = node starting, thinked/reply = node completed with outputs
+          thinking: handleNodeStarted,
+          thinked: handleNodeCompleted,
+          reply: handleNodeCompleted,
+          completed: handleWorkflowDone,
+          failed: handleNodeFailed,
+          skipped: handleNodeSkipped,
+          cancelled: handleWorkflowDone,
+        },
+        onError: () => {
+          sseControllerRef.current = null;
+          fallbackPoll(executionId);
+        },
+      }
+    );
   }, [nodes, workflowId, toast]);
 
   // 轮询兜底（SSE 失败时或备用）
@@ -624,10 +574,11 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
     const maxPolls = 120;
 
     const poll = async () => {
-      if (!eventSourceRef.current) {
+      if (!sseControllerRef.current) {
         pollCount++;
         try {
           const statusData = await workflowApi.getExecutionStatus(executionId);
+          console.log('[Poll] statusData:', statusData);
           console.log('[Poll] statusData:', { status: statusData.status, skippedNodes: statusData.skippedNodes, completedNodes: statusData.completedNodes });
 
           const newStatuses = adaptSnapshotToNodeStatuses(statusData, nodes.map(n => n.id));
@@ -649,7 +600,7 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
           const completedCount = (statusData.completedNodes?.length || 0) + (statusData.failedNodes?.length || 0);
           const totalNodes = statusData.totalNodes || nodes.length;
           const isAllNodesCompleted = completedCount >= totalNodes;
-          const isWorkflowFinished = statusData.status === 'completed' || statusData.status === 'failed';
+          const isWorkflowFinished = statusData.status === 'completed';
 
           if (isWorkflowFinished || isAllNodesCompleted) {
             setIsExecuting(false);
@@ -767,6 +718,9 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
         variant: "destructive",
       });
       setIsStopping(false);
+    } finally {
+      setIsExecuting(false);
+      setIsStopping(false);
     }
   };
 
@@ -780,10 +734,12 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
       return;
     }
 
+    // Idempotent: Reset all execution state before starting new run
     setIsExecuting(true);
-    setSidebarMode('progress');
+    setExecutionStatus('running');
     setExecution(null);
     setNodeResults([]);
+    nodeResultsRef.current = [];
 
     // 前端直接计算孤立节点（无入边且无出边），不依赖 SSE 时序
     const inDegree = new Map<string, number>();
@@ -816,7 +772,7 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
       setExecution({
         id: executionData.executionId,
         workflowId: executionData.workflowId,
-        status: executionData.status,
+        status: "running",
         results: [],
         startedAt: new Date(),
       });
@@ -835,7 +791,7 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
         variant: "destructive",
       });
       setIsExecuting(false);
-      setSidebarMode(null);
+      setExecutionStatus(null);
     }
   };
 
@@ -968,7 +924,6 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
             isStopping={isStopping}
             onClear={handleClear}
             onNew={handleClear}
-            onOpenHistory={() => setSidebarMode('history')}
             onOpenVersionHistory={() => setShowVersionHistoryDialog(true)}
             onSelectTemplate={handleSelectTemplate}
             onAddNode={handleAddNode}
@@ -1001,133 +956,90 @@ function layoutNodes(nodes: WorkflowNode[], edges: Edge[]): Map<string, { x: num
             }}
           />
 
-          <div className="flex-1 flex min-h-0">
-          <div className="flex-1 flex flex-col min-h-0">
-            <WorkflowCanvas
-              nodes={nodes}
-              edges={edges}
-              onNodesChange={handleNodesChange}
-              onEdgesChange={handleEdgesChange}
-              onConnect={onConnect}
-              onNodesUpdate={handleNodesUpdate}
-              onNodeClick={(node) => {
-                setSelectedNode(node);
-                setShowOutput(false);
-              }}
-              nodeStatuses={nodeStatuses}
-              onContextMenu={(pos) => {
-                addNodePositionRef.current = pos;
-                setShowAddNode(true);
-              }}
-              onStartNodeBlocked={() => {
-                toast({
-                  title: "Cannot add Start node",
-                  description: "A workflow can only have one Start node",
-                  variant: "destructive",
-                });
-              }}
-            />
-          </div>
-
-          {selectedNode && !showOutput && (
-            <div className="border-workflow-border shrink-0 pl-3" style={{ width: "25%" }}>
-              <div className="h-full bg-workflow-node-bg rounded-l-xl border border-workflow-border/50 shadow-lg overflow-hidden">
-                <NodeEditPanel
-                  node={selectedNode}
+          <div className="flex-1 flex min-h-0 flex-col">
+            {/* Main content area with canvas and sidebar */}
+            <div className="flex-1 flex min-h-0">
+              <div className="flex-1 flex flex-col min-h-0">
+                <WorkflowCanvas
                   nodes={nodes}
                   edges={edges}
-                  onClose={() => setSelectedNode(null)}
-                  onUpdate={(nodeId, data) => {
-                    if (isLocked) return; // Prevent updates if locked
-                    setNodes((nds) =>
-                      nds.map((node) =>
-                        node.id === nodeId ? { ...node, data: { ...node.data, ...data } } : node
-                      )
-                    );
-                    setSelectedNode((prev) =>
-                      prev && prev.id === nodeId
-                        ? { ...prev, data: { ...prev.data, ...data } }
-                        : prev
-                    );
-                    setHasChanges(true);
+                  onNodesChange={handleNodesChange}
+                  onEdgesChange={handleEdgesChange}
+                  onConnect={onConnect}
+                  onNodesUpdate={handleNodesUpdate}
+                  onNodeClick={(node) => {
+                    setSelectedNode(node);
+                    setShowOutput(false);
                   }}
-                  readOnly={isLocked}
-                />
-              </div>
-            </div>
-          )}
-
-          {sidebarMode === 'progress' && (execution || isExecuting) && (
-            <div className="border-workflow-border shrink-0 pl-3" style={{ width: "25%" }}>
-              <div className="h-full bg-workflow-node-bg rounded-l-xl border border-workflow-border/50 shadow-lg overflow-hidden">
-                <OutputPanel
-                  execution={execution}
-                  nodeResults={nodeResults}
-                  isExecuting={isExecuting}
-                  onClose={() => {
-                    setSidebarMode(null);
-                    setExecution(null);
-                  }}
-                  nodes={nodes}
                   nodeStatuses={nodeStatuses}
+                  onContextMenu={(pos) => {
+                    addNodePositionRef.current = pos;
+                    setShowAddNode(true);
+                  }}
+                  onStartNodeBlocked={() => {
+                    toast({
+                      title: "Cannot add Start node",
+                      description: "A workflow can only have one Start node",
+                      variant: "destructive",
+                    });
+                  }}
                 />
               </div>
-            </div>
-          )}
 
-          {sidebarMode === 'history' && (
-            <div className="border-workflow-border shrink-0 pl-3" style={{ width: "25%" }}>
-              <div className="h-full bg-workflow-node-bg rounded-l-xl border border-workflow-border/50 shadow-lg overflow-hidden flex flex-col">
-                <div className="flex items-center justify-between p-3 border-b border-workflow-border">
-                  <h2 className="font-mono text-sm font-semibold text-workflow-text">Run History</h2>
-                  <button
-                    type="button"
-                    onClick={() => setSidebarMode(null)}
-                    className="p-1 hover:bg-workflow-surface-hover rounded-lg transition-colors duration-200 text-workflow-text-muted hover:text-workflow-text"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                {selectedRun ? (
-                  <div className="flex-1 overflow-auto">
-                    <div className="p-3 border-b border-workflow-border">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedRun(null)}
-                        className="flex items-center gap-2 text-xs font-mono text-workflow-text-muted hover:text-workflow-text transition-colors duration-200"
-                      >
-                        ← Back to History
-                      </button>
-                    </div>
-                    <div className="p-3">
-                      <RunDetails run={selectedRun} onClose={() => setSelectedRun(null)} />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex-1 overflow-auto">
-                    <RunHistoryContent
-                      workflowId={workflowId || ''}
-                      onSelectRun={setSelectedRun}
+              {selectedNode && !showOutput && (
+                <div className="border-workflow-border shrink-0 pl-3" style={{ width: "25%" }}>
+                  <div className="h-full bg-workflow-node-bg rounded-l-xl border border-workflow-border/50 shadow-lg overflow-hidden">
+                    <NodeEditPanel
+                      node={selectedNode}
+                      nodes={nodes}
+                      edges={edges}
+                      onClose={() => setSelectedNode(null)}
+                      onUpdate={(nodeId, data) => {
+                        if (isLocked) return; // Prevent updates if locked
+                        setNodes((nds) =>
+                          nds.map((node) =>
+                            node.id === nodeId ? { ...node, data: { ...node.data, ...data } } : node
+                          )
+                        );
+                        setSelectedNode((prev) =>
+                          prev && prev.id === nodeId
+                            ? { ...prev, data: { ...prev.data, ...data } }
+                            : prev
+                        );
+                        setHasChanges(true);
+                      }}
+                      readOnly={isLocked}
                     />
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+
+            {/* Execution log panel at the bottom - always visible */}
+            <ExecutionLogPanel
+              workflowId={workflowId}
+              isExecuting={isExecuting}
+              executionId={currentExecutionId}
+              executionStatus={executionStatus}
+              nodeResults={nodeResults}
+              nodes={nodes}
+              nodeStatuses={nodeStatuses}
+              onClear={() => {
+                setNodeResults([]);
+                nodeResultsRef.current = [];
+                setNodeStatuses(new Map());
+                setExecutionStatus(null);
+              }}
+              onStart={handleExecute}
+              onStop={handleStop}
+            />
+          </div>
         </div>
 
       <LoadWorkflowDialog
         isOpen={showLoadDialog}
         onLoad={handleLoad}
         onClose={() => setShowLoadDialog(false)}
-      />
-
-      <RunHistoryDialog
-        isOpen={showHistoryDialog}
-        workflowId={workflowId || ''}
-        onClose={() => setShowHistoryDialog(false)}
-        onSelectRun={() => {}}
       />
 
       <ApiCallDialog

@@ -555,12 +555,6 @@ func (e *WorkflowExecutor) executeNodeWithRetry(ctx *ExecutionContext, nodeID st
 		nodeCtx := e.prepareNodeContext(ctx, nodeID)
 		result, err := e.executeSingleNode(ctx, nodeCtx)
 
-		// 节点返回 result.Error 但没有 Go 级别错误时（如 HTTP 节点请求失败），以触发重试逻辑
-		if err == nil && result != nil && result.Error != "" {
-			err = fmt.Errorf("%s", result.Error)
-			result = nil
-		}
-
 		if err == nil {
 			return result, nil
 		}

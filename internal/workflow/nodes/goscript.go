@@ -42,7 +42,8 @@ func (e *GoScriptExecutor) Execute(ctx context.Context, nodeCtx *models.NodeCont
 	// 验证配置
 	code, ok := nodeCtx.Config["code"].(string)
 	if !ok || strings.TrimSpace(code) == "" {
-		return e.createErrorResult(fmt.Errorf("code not found or empty"), "validation"), nil
+		errContent := "code not found or empty"
+		return e.createErrorResult(fmt.Errorf(errContent), "validation"), fmt.Errorf(errContent)
 	}
 
 	timeout := 30 * time.Second // 默认 30 秒
@@ -60,7 +61,7 @@ func (e *GoScriptExecutor) Execute(ctx context.Context, nodeCtx *models.NodeCont
 	// 执行Go代码
 	result, err := e.executeGoCode(ctx, code, inputData, timeout)
 	if err != nil {
-		return e.createErrorResult(err, "execution"), nil
+		return e.createErrorResult(err, "execution"), err
 	}
 
 	return &models.NodeResult{

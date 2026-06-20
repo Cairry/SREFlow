@@ -8,7 +8,6 @@ import (
 
 	"SREFlow/internal/models"
 	"SREFlow/internal/repos"
-	"SREFlow/pkg/tools"
 )
 
 // WorkflowEngine 核心工作流引擎
@@ -81,22 +80,6 @@ func (e *WorkflowEngine) ExecuteWithNodes(ctx context.Context, workflow *models.
 	// 检测孤立节点（没有连接线的节点）
 	isolatedNodes := findIsolatedNodes(topology)
 
-	// 如果没有传入 execution，则创建新的
-	if execution == nil {
-		execution = &models.WorkflowExecution{
-			ID:             "exec-" + tools.RandId(),
-			WorkflowID:     workflow.ID,
-			WorkflowName:   workflow.Name,
-			Status:         "running",
-			StartedAt:      time.Now().Unix(),
-			NodeResults:    make(map[string]*models.NodeResult),
-			Variables:      make(map[string]any),
-			RunningNodes:   []string{},
-			CompletedNodes: []string{},
-			FailedNodes:    []string{},
-		}
-	}
-
 	// 检查是否已初始化（重复调用时跳过）
 	_, stateExists := e.stateManager.CheckWorkflowState(execution.ID)
 
@@ -127,7 +110,7 @@ func (e *WorkflowEngine) ExecuteWithNodes(ctx context.Context, workflow *models.
 		}
 	}
 
-	// 执行工作流节点（可选）
+	// 执行工作流节点
 	if executeNodes {
 		err = e.executor.Execute(ctx, execution, topology, workflow.WorkspaceID)
 		if err != nil {

@@ -2,11 +2,9 @@ package api
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"strconv"
-	"time"
 
 	ctxutil "SREFlow/internal/ctx"
 	"SREFlow/internal/services"
@@ -36,13 +34,13 @@ func (workflow) API(gin *gin.RouterGroup) {
 
 	// Workflow execution operations
 	singular.POST("/:id/execute", executeWorkflow)
-	singular.POST("/executions/:executionId/cancel", cancelExecution)
-	singular.GET("/executions/:executionId", getExecutionResult)
-	singular.GET("/executions/:executionId/status", getExecutionStatus)
-	singular.GET("/executions/:executionId/stream", streamExecutionStatus)
+	singular.POST("/:id/cancel", cancelExecution)
+	singular.GET("/:id/result", getExecutionResult)
+	singular.GET("/:id/status", getExecutionStatus)
+	singular.GET("/:id/stream", streamExecutionStatus)
 	singular.GET("/:id/run-history", getRunHistory)
 	singular.GET("/run-history", getAllRunHistory)
-	singular.DELETE("/run-history/:executionId", deleteRunHistory)
+	singular.DELETE("/run-history/:id", deleteRunHistory)
 
 	// Workflow version history
 	singular.GET("/:id/versions", getVersionHistory)
@@ -169,7 +167,8 @@ func deleteWorkflow(ctx *gin.Context) {
 	})
 }
 
-// executeWorkflow handles POST /api/workflow/:id/execute (async)
+// executeWorkflow handles POST /api/workflow/:id/execute
+// Returns executionId, then client subscribes to SSE via /api/workflow/:id/stream or /api/chat/:id/stream
 func executeWorkflow(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -177,20 +176,20 @@ func executeWorkflow(c *gin.Context) {
 		return
 	}
 
-	// 读取 mode query 参数，默认为 text
+	// Read query params
 	mode := c.Query("mode")
 	if mode == "" {
 		mode = "text"
 	}
 
-	// mode=json 时读取原始 body，用于将整个 body 传递给 Start 节点
+	// mode=json: read raw body for passing entire body to Start node
 	var rawBody []byte
 	if mode == "json" {
 		rawBody, _ = io.ReadAll(c.Request.Body)
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(rawBody))
 	}
 
-	// 解析请求体，读取 input 参数
+	// Parse request body
 	r := new(types.RequestWorkflowExecute)
 	if err := BindJson(c, r); err != nil {
 		Error(c, nil, err.Error())
@@ -202,33 +201,40 @@ func executeWorkflow(c *gin.Context) {
 	if mode == "json" {
 		r.RawBody = string(rawBody)
 	}
-	// 从请求 context 透传 trace id，使异步执行的逻辑层日志可串联
 	r.TraceID = trace.FromContext(c.Request.Context())
 
-	// 验证 input 参数：input 为空且数据库中 Start 节点 text 也为空时返回 400
+	// Validate
 	ap := ctxutil.DO()
 	if err := r.Valid(ap.Ctx, ap.Database, ap.Cache); err != nil {
 		Error(c, nil, err.Error())
 		return
 	}
 
-	Service(c, func() (interface{}, error) {
-		return services.Workflow.ExecuteAsync(r)
-	})
+	// Execute synchronously with streaming support
+	_, executionID, err := services.Workflow.ExecuteSyncWithStream(r)
+	if err != nil {
+		Error(c, nil, err.Error())
+		return
+	}
+
+	// Return executionId for SSE subscription
+	Success(c, map[string]string{
+		"executionId": executionID,
+	}, "")
 }
 
-// getExecutionResult handles GET /api/workflow/executions/:executionId
+// getExecutionResult handles GET /api/workflow/:executionId
 func getExecutionResult(ctx *gin.Context) {
-	executionId := ctx.Param("executionId")
+	executionId := ctx.Param("id")
 
 	Service(ctx, func() (interface{}, error) {
 		return services.Workflow.GetExecutionResult(executionId)
 	})
 }
 
-// getExecutionStatus handles GET /api/workflow/executions/:executionId/status
+// getExecutionStatus handles GET /api/workflow/:executionId/status
 func getExecutionStatus(ctx *gin.Context) {
-	executionId := ctx.Param("executionId")
+	executionId := ctx.Param("id")
 
 	Service(ctx, func() (interface{}, error) {
 		return services.Workflow.GetExecutionStatus(executionId)
@@ -237,58 +243,14 @@ func getExecutionStatus(ctx *gin.Context) {
 
 // streamExecutionStatus SSE 流式推送执行状态
 func streamExecutionStatus(ctx *gin.Context) {
-	executionId := ctx.Param("executionId")
+	executionId := ctx.Param("id")
 
 	if executionId == "" {
 		Error(ctx, nil, "execution id is required")
 		return
 	}
 
-	ctx.Header("Content-Type", "text/event-stream")
-	ctx.Header("Cache-Control", "no-cache")
-	ctx.Header("Connection", "keep-alive")
-	ctx.Header("X-Accel-Buffering", "no")
-
-	ctx.Writer.Write([]byte(": connected\n\n"))
-	ctx.Writer.Flush()
-
-	eventCh := services.Workflow.RegisterStreamChannel(executionId)
-	defer services.Workflow.UnregisterStreamChannel(executionId)
-
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-
-	clientGone := ctx.Request.Context().Done()
-
-	for {
-		select {
-		case <-clientGone:
-			return
-		case event, ok := <-eventCh:
-			if !ok {
-				return
-			}
-			eventJSON, err := json.Marshal(event)
-			if err != nil {
-				continue
-			}
-			ctx.Writer.Write(fmt.Appendf(nil, "event: %s\ndata: %s\n\n", event.Event, string(eventJSON)))
-			ctx.Writer.Flush()
-		case <-ticker.C:
-			heartbeatEvent := map[string]interface{}{
-				"event":   "heartbeat",
-				"task_id": executionId,
-				"data": map[string]interface{}{
-					"id":     executionId,
-					"status": "alive",
-					"time":   time.Now().Unix(),
-				},
-			}
-			heartbeatJSON, _ := json.Marshal(heartbeatEvent)
-			ctx.Writer.Write(fmt.Appendf(nil, "event: %s\ndata: %s\n\n", "heartbeat", string(heartbeatJSON)))
-			ctx.Writer.Flush()
-		}
-	}
+	handleSSEStream(ctx, executionId)
 }
 
 // getRunHistory handles GET /api/workflows/:id/run-history
@@ -320,9 +282,9 @@ func getAllRunHistory(ctx *gin.Context) {
 	})
 }
 
-// deleteRunHistory handles DELETE /api/workflow/run-history/:executionId
+// deleteRunHistory handles DELETE /api/workflow/run-history/:id
 func deleteRunHistory(ctx *gin.Context) {
-	executionId := ctx.Param("executionId")
+	executionId := ctx.Param("id")
 
 	Service(ctx, func() (interface{}, error) {
 		return services.Workflow.DeleteRunHistory(executionId)
@@ -410,9 +372,9 @@ func gotoVersion(ctx *gin.Context) {
 	})
 }
 
-// cancelExecution handles POST /api/workflow/executions/:executionId/cancel
+// cancelExecution handles POST /api/workflow/:id/cancel
 func cancelExecution(ctx *gin.Context) {
-	executionId := ctx.Param("executionId")
+	executionId := ctx.Param("id")
 
 	Service(ctx, func() (interface{}, error) {
 		err := services.Workflow.CancelWorkflowExecution(ctx, executionId)

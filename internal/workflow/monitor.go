@@ -21,7 +21,9 @@ type ExecutionMonitor struct {
 	// SSE 事件通道管理
 	channelMu           sync.Mutex
 	streamEventChannels map[string]*streamChannelState
-	eventHandler        EventHandler
+	// 辅助订阅者通道（如 save-message goroutine），fan-out 分发，不与主 SSE channel 争抢
+	subscriberChannels map[string][]*streamChannelState
+	eventHandler       EventHandler
 }
 
 // streamChannelState 封装 channel 及其状态，防止向已关闭 channel 发送
@@ -176,6 +178,7 @@ func NewExecutionMonitor() *ExecutionMonitor {
 		executions:          make(map[string]*ExecutionMetrics),
 		nodeMetrics:         make(map[string]*NodeMetrics),
 		streamEventChannels: make(map[string]*streamChannelState),
+		subscriberChannels:  make(map[string][]*streamChannelState),
 		eventHandler:        &DefaultEventHandler{},
 	}
 }
@@ -221,18 +224,49 @@ func (m *ExecutionMonitor) UnregisterStreamChannel(executionID string) {
 }
 
 // emitStreamEvent 统一的流式事件发送方法
+// 同时向主 SSE channel 和所有 subscriber channel 分发（fan-out）
 func (m *ExecutionMonitor) emitStreamEvent(event *StreamStyleEvent) {
 	m.mu.RLock()
 	state, exists := m.streamEventChannels[event.TaskID]
+	subscribers := m.subscriberChannels[event.TaskID]
 	m.mu.RUnlock()
 
-	if !exists || state == nil {
-		return
+	if exists && state != nil {
+		if !state.send(event) {
+			logc.Errorf(context.Background(), "[Monitor] failed to send event %s for execution %s", event.Event, event.TaskID)
+		}
 	}
 
-	if !state.send(event) {
-		logc.Errorf(context.Background(), "[Monitor] failed to send event %s for execution %s", event.Event, event.TaskID)
+	// fan-out to all subscriber channels
+	for _, sub := range subscribers {
+		sub.send(event)
 	}
+}
+
+// SubscribeExecution 创建独立的订阅者通道，用于辅助消费者（如保存消息的 goroutine）。
+// 返回 channel 和清理函数；调用清理函数即可注销订阅。
+// 与主 SSE channel 互不干扰，两者均能收到全量事件。
+func (m *ExecutionMonitor) SubscribeExecution(executionID string) (chan *StreamStyleEvent, func()) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	sub := newStreamChannelState(100)
+	m.subscriberChannels[executionID] = append(m.subscriberChannels[executionID], sub)
+
+	cleanup := func() {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		subs := m.subscriberChannels[executionID]
+		for i, s := range subs {
+			if s == sub {
+				m.subscriberChannels[executionID] = append(subs[:i], subs[i+1:]...)
+				break
+			}
+		}
+		sub.close()
+	}
+
+	return sub.ch, cleanup
 }
 
 // getNodeStatesSnapshot 获取当前所有节点状态快照
@@ -287,8 +321,6 @@ func (m *ExecutionMonitor) StartExecution(executionID, workflowID, workflowName 
 	}
 
 	m.executions[executionID] = metrics
-	nodeStates := m.getNodeStatesSnapshotRL(executionID)
-	totalNodes := len(metrics.NodeStatuses)
 
 	m.mu.Unlock()
 
@@ -296,9 +328,10 @@ func (m *ExecutionMonitor) StartExecution(executionID, workflowID, workflowName 
 		m.eventHandler.OnExecutionStarted(executionID)
 	}
 
+	// 发送 running 事件，通知前端初始化节点状态
 	event := NewStreamStyleEvent("running", executionID, workflowID, workflowName)
-	event.Data.NodeStates = nodeStates
-	event.Data.TotalNodes = totalNodes
+	event.Data.NodeStates = m.getNodeStatesSnapshot(executionID)
+	event.Data.TotalNodes = len(metrics.NodeStatuses)
 	m.emitStreamEvent(event)
 }
 
@@ -350,12 +383,13 @@ func (m *ExecutionMonitor) EndExecution(executionID, status string) {
 		}
 	}
 
-	eventType := "workflow_completed"
+	// 根据状态发送对应事件：completed / failed
+	eventType := "completed"
 	if status == "failed" {
-		eventType = "workflow_failed"
+		eventType = "failed"
 	}
-
 	event := NewStreamStyleEvent(eventType, executionID, workflowID, workflowName)
+	event.Data.Status = status
 	event.Data.NodeStates = nodeStates
 	event.Data.TotalNodes = totalNodes
 	event.Data.CompletedNodes = completedNodes
@@ -365,11 +399,16 @@ func (m *ExecutionMonitor) EndExecution(executionID, status string) {
 	if streamState != nil {
 		time.Sleep(10 * time.Millisecond)
 		streamState.close()
-
-		m.mu.Lock()
-		delete(m.streamEventChannels, executionID)
-		m.mu.Unlock()
 	}
+
+	m.mu.Lock()
+	delete(m.streamEventChannels, executionID)
+	// 同时关闭所有 subscriber channels，让消费 goroutine 退出
+	for _, sub := range m.subscriberChannels[executionID] {
+		sub.close()
+	}
+	delete(m.subscriberChannels, executionID)
+	m.mu.Unlock()
 
 	go func() {
 		time.Sleep(30 * time.Second)
@@ -405,30 +444,16 @@ func (m *ExecutionMonitor) NodeStarted(executionID, nodeID, nodeType string) {
 		StartTime:   time.Now(),
 	}
 
-	var workflowID, workflowName string
-	if metrics, exists := m.executions[executionID]; exists {
-		workflowID = metrics.WorkflowID
-		workflowName = metrics.WorkflowName
-	}
-
-	nodeStates := m.getNodeStatesSnapshotRL(executionID)
-
 	m.mu.Unlock()
 
 	if m.eventHandler != nil {
 		m.eventHandler.OnNodeStarted(executionID, nodeID, nodeType)
 	}
-
-	event := NewStreamNodeEvent("node_started", executionID, workflowID, workflowName, nodeID, nodeType, nil, "", 0)
-	event.Data.NodeStates = nodeStates
-	m.emitStreamEvent(event)
 }
 
 // NodeCompleted 节点执行完成
 func (m *ExecutionMonitor) NodeCompleted(executionID, nodeID string, result *models.NodeResult) {
 	m.mu.Lock()
-
-	var duration time.Duration
 
 	if execMetrics, exists := m.executions[executionID]; exists {
 		execMetrics.Mutex.Lock()
@@ -445,49 +470,14 @@ func (m *ExecutionMonitor) NodeCompleted(executionID, nodeID string, result *mod
 		nodeMetrics.EndTime = &now
 		nodeMetrics.Duration = now.Sub(nodeMetrics.StartTime)
 		nodeMetrics.Status = NodeStatusCompleted
-		duration = nodeMetrics.Duration
 		nodeMetrics.Mutex.Unlock()
 	}
-
-	var workflowID, workflowName, nodeType string
-	if metrics, exists := m.executions[executionID]; exists {
-		workflowID = metrics.WorkflowID
-		workflowName = metrics.WorkflowName
-	}
-	if nm, exists := m.nodeMetrics[key]; exists {
-		nodeType = nm.NodeType
-	}
-
-	nodeStates := m.getNodeStatesSnapshotRL(executionID)
 
 	m.mu.Unlock()
 
 	if m.eventHandler != nil {
 		m.eventHandler.OnNodeCompleted(executionID, nodeID, result)
 	}
-
-	outputs := make(map[string]any)
-	if result != nil {
-		outputs = result.Outputs
-	}
-
-	stringifiedOutputs := make(map[string]string)
-	for k, v := range outputs {
-		stringifiedOutputs[k] = stringifyValue(v)
-	}
-
-	event := NewStreamNodeEvent("node_completed", executionID, workflowID, workflowName, nodeID, nodeType, nil, "", duration.Seconds())
-	event.Node.Outputs = stringifiedOutputs
-	event.Data.NodeStates = nodeStates
-
-	m.mu.RLock()
-	if metrics, exists := m.executions[executionID]; exists {
-		event.Data.TotalNodes = metrics.TotalNodes
-		event.Data.CompletedNodes = metrics.CompletedNodes
-	}
-	m.mu.RUnlock()
-
-	m.emitStreamEvent(event)
 }
 
 // NodeFailed 节点执行失败
@@ -498,8 +488,6 @@ func (m *ExecutionMonitor) NodeFailed(executionID, nodeID string, err error) {
 	if err != nil {
 		errMsg = err.Error()
 	}
-
-	var duration time.Duration
 
 	if execMetrics, exists := m.executions[executionID]; exists {
 		execMetrics.Mutex.Lock()
@@ -517,31 +505,14 @@ func (m *ExecutionMonitor) NodeFailed(executionID, nodeID string, err error) {
 		nodeMetrics.Duration = now.Sub(nodeMetrics.StartTime)
 		nodeMetrics.Status = NodeStatusFailed
 		nodeMetrics.Error = errMsg
-		duration = nodeMetrics.Duration
 		nodeMetrics.Mutex.Unlock()
 	}
-
-	var workflowID, workflowName, nodeType string
-	if metrics, exists := m.executions[executionID]; exists {
-		workflowID = metrics.WorkflowID
-		workflowName = metrics.WorkflowName
-	}
-	if nm, exists := m.nodeMetrics[key]; exists {
-		nodeType = nm.NodeType
-	}
-
-	nodeStates := m.getNodeStatesSnapshotRL(executionID)
 
 	m.mu.Unlock()
 
 	if m.eventHandler != nil {
 		m.eventHandler.OnNodeFailed(executionID, nodeID, err)
 	}
-
-	event := NewStreamNodeEvent("node_failed", executionID, workflowID, workflowName, nodeID, nodeType, nil, errMsg, duration.Seconds())
-	event.Data.Error = errMsg
-	event.Data.NodeStates = nodeStates
-	m.emitStreamEvent(event)
 }
 
 // NodeRetry 节点重试
@@ -654,16 +625,18 @@ func formatDuration(seconds float64) string {
 }
 
 // getStatusFromEvent 根据事件类型获取工作流状态
-// 节点级别事件（node_*）不应改变工作流级别状态，
+// 节点级别事件（thinking/thinked/reply）不应改变工作流级别状态，
 // 只有工作流级别事件才应设置 "succeeded"/"failed"。
 func getStatusFromEvent(event string) string {
 	switch event {
-	case "running", "node_started", "node_completed", "node_failed", "node_skipped":
+	case "started", "running", "thinking", "thinked", "reply":
 		return "running"
-	case "succeeded", "workflow_completed":
+	case "completed":
 		return "succeeded"
-	case "workflow_failed":
+	case "failed":
 		return "failed"
+	case "cancelled":
+		return "cancelled"
 	default:
 		return "running"
 	}
@@ -671,28 +644,32 @@ func getStatusFromEvent(event string) string {
 
 // EmitStreamWorkflowStarted 发送工作流开始事件
 func (m *ExecutionMonitor) EmitStreamWorkflowStarted(executionID, workflowID, workflowName string) {
-	event := NewStreamStyleEvent("running", executionID, workflowID, workflowName)
+	event := NewStreamStyleEvent("started", executionID, workflowID, workflowName)
 	event.Data.NodeStates = m.getNodeStatesSnapshot(executionID)
 	m.emitStreamEvent(event)
 }
 
-// EmitStreamNodeStarted 发送节点开始事件
+// EmitStreamNodeStarted 发送节点开始事件 (thinking start)
 func (m *ExecutionMonitor) EmitStreamNodeStarted(executionID, workflowID, workflowName, nodeID, nodeType string) {
-	event := NewStreamNodeEvent("node_started", executionID, workflowID, workflowName, nodeID, nodeType, nil, "", 0)
+	// Only emit thinking for non-Reply nodes
+	if nodeType == "Reply" {
+		return
+	}
+	event := NewStreamNodeEvent("thinking", executionID, workflowID, workflowName, nodeID, nodeType, nil, "", 0)
 	event.Data.NodeStates = m.getNodeStatesSnapshot(executionID)
 	m.emitStreamEvent(event)
 }
 
 // EmitStreamNodeCompleted 发送节点完成事件
-// Reply 节点发送 reply 事件，其他节点发送 thinking 事件
+// Reply 节点发送 reply 事件，其他节点发送 thinked 事件
 func (m *ExecutionMonitor) EmitStreamNodeCompleted(executionID, workflowID, workflowName, nodeID, nodeType string, outputs map[string]any, duration float64) {
 	stringifiedOutputs := make(map[string]string)
 	for k, v := range outputs {
 		stringifiedOutputs[k] = stringifyValue(v)
 	}
 
-	// 根据节点类型决定事件类型：Reply -> reply, 其他 -> thinking
-	eventType := "thinking"
+	// 根据节点类型决定事件类型：Reply -> reply, 其他 -> thinked
+	eventType := "thinked"
 	if nodeType == "Reply" {
 		eventType = "reply"
 	}
@@ -713,7 +690,8 @@ func (m *ExecutionMonitor) EmitStreamNodeCompleted(executionID, workflowID, work
 
 // EmitStreamNodeFailed 发送节点失败事件
 func (m *ExecutionMonitor) EmitStreamNodeFailed(executionID, workflowID, workflowName, nodeID, nodeType string, errMsg string, duration float64) {
-	event := NewStreamNodeEvent("node_failed", executionID, workflowID, workflowName, nodeID, nodeType, nil, errMsg, duration)
+	event := NewStreamNodeEvent("failed", executionID, workflowID, workflowName, nodeID, nodeType, nil, errMsg, duration)
+	event.Node.Outputs = map[string]string{"error": errMsg}
 	event.Data.Error = errMsg
 	event.Data.NodeStates = m.getNodeStatesSnapshot(executionID)
 	m.emitStreamEvent(event)
@@ -730,19 +708,19 @@ func (m *ExecutionMonitor) EmitStreamNodeSkipped(executionID, workflowID, workfl
 		metrics.Mutex.Unlock()
 	}
 
-	event := NewStreamNodeEvent("node_skipped", executionID, workflowID, workflowName, nodeID, nodeType, nil, "no connections, skipped", 0)
+	event := NewStreamNodeEvent("skipped", executionID, workflowID, workflowName, nodeID, nodeType, nil, "no connections, skipped", 0)
 	event.Data.NodeStates = m.getNodeStatesSnapshot(executionID)
 	m.emitStreamEvent(event)
 }
 
-// EmitStreamWorkflowCompleted 发送工作流完成事件
+// EmitStreamWorkflowCompleted 发送工作流完成事件（completed / failed）
 func (m *ExecutionMonitor) EmitStreamWorkflowCompleted(executionID, workflowID, workflowName string, status string) {
-	eventType := "workflow_completed"
+	eventType := "completed"
 	if status == "failed" {
-		eventType = "workflow_failed"
+		eventType = "failed"
 	}
-
 	event := NewStreamStyleEvent(eventType, executionID, workflowID, workflowName)
+	event.Data.Status = status
 	event.Data.NodeStates = m.getNodeStatesSnapshot(executionID)
 
 	m.mu.RLock()

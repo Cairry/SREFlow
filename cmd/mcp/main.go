@@ -173,7 +173,7 @@ func executionStatusHandler() server.ToolHandlerFunc {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		httpReq, err := http.NewRequest("GET", baseURL+"/workflow/executions/"+executionId+"/status", nil)
+		httpReq, err := http.NewRequest("GET", baseURL+"/workflow/"+executionId+"/status", nil)
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to create request", err), nil
 		}
@@ -205,7 +205,7 @@ func executionResultHandler() server.ToolHandlerFunc {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		httpReq, err := http.NewRequest("GET", baseURL+"/workflow/executions/"+executionId, nil)
+		httpReq, err := http.NewRequest("GET", baseURL+"/workflow/"+executionId, nil)
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to create request", err), nil
 		}

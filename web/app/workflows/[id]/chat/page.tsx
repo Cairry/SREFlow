@@ -4,8 +4,9 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ArrowLeft, Send, Loader2, Brain, MessageSquare, ChevronDown, ChevronRight, Workflow, Sparkles, Trash2, PanelTop, PanelTopClose, Square, Plus, MessageCircle } from "lucide-react";
+import { ArrowLeft, Send, Loader2, Brain, MessageSquare, ChevronRight, Workflow, Sparkles, Trash2, PanelTop, PanelTopClose, Square, Plus, MessageCircle, Edit } from "lucide-react";
 import { workflowApi, ChatSession, ChatMessage } from "@/lib/api/workflow";
+import { connectSSEStream, SSEEvent } from "@/lib/sse";
 import { cn } from "@/lib/utils";
 import { isNavHidden, toggleNav } from "@/lib/nav-toggle";
 
@@ -24,16 +25,6 @@ interface Message {
   thinking?: ThinkingStep[];
 }
 
-interface StreamEvent {
-  event: string;
-  data: any;
-  node?: {
-    id: string;
-    type: string;
-    outputs: Record<string, string>;
-    elapsed_time?: string;
-  };
-}
 
 export default function ChatPage() {
   const params = useParams();
@@ -131,6 +122,12 @@ export default function ChatPage() {
       });
       
       setMessages(formattedMessages);
+      
+      // 默认折叠所有有 thinking 的消息
+      const thinkingMessageIds = formattedMessages
+        .filter(msg => msg.thinking && msg.thinking.length > 0)
+        .map(msg => msg.id);
+      setCollapsedThinking(new Set(thinkingMessageIds));
     } catch (error) {
       console.error("Failed to load session messages:", error);
     }
@@ -169,36 +166,6 @@ export default function ChatPage() {
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  const parseSSE = (text: string): StreamEvent[] => {
-    const events: StreamEvent[] = [];
-    const lines = text.split("\n");
-    
-    let currentEvent: Partial<StreamEvent> = {};
-    
-    for (const line of lines) {
-      if (line.startsWith("event:")) {
-        currentEvent.event = line.substring(7).trim();
-      } else if (line.startsWith("data:")) {
-        const dataStr = line.substring(5).trim();
-        try {
-          const parsed = JSON.parse(dataStr);
-          currentEvent.data = parsed;
-          // Extract node from parsed data (node is at top level in SSE)
-          if (parsed.node) {
-            currentEvent.node = parsed.node;
-          }
-        } catch {
-          currentEvent.data = dataStr;
-        }
-      } else if (line === "" && currentEvent.event) {
-        events.push(currentEvent as StreamEvent);
-        currentEvent = {};
-      }
-    }
-    
-    return events;
   };
 
   const extractContent = (outputs: Record<string, string>): string => {
@@ -275,95 +242,98 @@ export default function ChatPage() {
       timestamp: new Date(),
     };
 
+    // Thinking 默认折叠
+    setCollapsedThinking(prev => new Set(prev).add(assistantMessageId));
+
     setMessages((prev) => [...prev, assistantMessage]);
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
     try {
-      const stream = await workflowApi.chat(workflowId, userMessage.content, 'text', abortController.signal, sessionId);
-      const reader = stream.getReader();
-      const decoder = new TextDecoder();
+      // Step 1: Execute workflow and get executionId
+      const { executionId } = await workflowApi.chat(workflowId, userMessage.content, 'text', abortController.signal, sessionId);
+      setCurrentExecutionId(executionId);
 
-      let buffer = "";
+      // Step 2: Subscribe to SSE stream via shared utility
+      const finishSession = async () => {
+        const updatedSessions = await workflowApi.listChatSessions(workflowId);
+        setSessions(updatedSessions || []);
+      };
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const events = parseSSE(buffer);
-        
-        const lastNewline = buffer.lastIndexOf("\n\n");
-        if (lastNewline !== -1) {
-          buffer = buffer.substring(lastNewline + 2);
-        }
-
-        for (const event of events) {
-          if (event.event === "heartbeat") continue;
-
-          if (event.event === "execution_started" && event.data?.executionId) {
-            setCurrentExecutionId(event.data.executionId);
-            continue;
-          }
-          
-          // Node info is at top level, not in data.node
-          const node = event.node;
-          const nodeId = node?.id;
-          const nodeType = node?.type || "";
-          const outputs = node?.outputs || {};
-          const elapsedTime = node?.elapsed_time || "";
-
-          if ((event.event === "thinking" || event.event === "reply") && nodeId) {
-            const content = extractContent(outputs);
-            
-            if (event.event === "thinking") {
-              setMessages((prev) =>
-                prev.map((msg) => {
-                  if (msg.id !== assistantMessageId) return msg;
-                  
-                  const existingStep = msg.thinking?.find(s => s.nodeId === nodeId);
-                  if (existingStep) {
-                    return {
-                      ...msg,
-                      thinking: msg.thinking!.map(s => 
-                        s.nodeId === nodeId ? { ...s, content: s.content + content } : s
-                      ),
-                    };
-                  }
-                  
-                  return {
-                    ...msg,
-                    thinking: [...(msg.thinking || []), { nodeId, nodeType, content, elapsed_time: elapsedTime }],
-                  };
-                })
+      connectSSEStream(
+        executionId,
+        {
+          on: {
+            thinked: (event: SSEEvent) => {
+              const nodeId = event.node?.id;
+              const nodeType = event.node?.type || "";
+              const outputs = event.node?.outputs || {};
+              const elapsedTime = event.node?.elapsed_time || "";
+              if (!nodeId) return;
+              const content = extractContent(outputs);
+              setMessages(prev =>
+                prev.map(msg =>
+                  msg.id !== assistantMessageId
+                    ? msg
+                    : { ...msg, thinking: [...(msg.thinking || []), { nodeId, nodeType, content, elapsed_time: elapsedTime }] }
+                )
+              );
+            },
+            reply: (event: SSEEvent) => {
+              const nodeId = event.node?.id;
+              const outputs = event.node?.outputs || {};
+              if (!nodeId) return;
+              const content = extractContent(outputs);
+              setMessages(prev =>
+                prev.map(msg =>
+                  msg.id === assistantMessageId ? { ...msg, content: msg.content + content } : msg
+                )
+              );
+            },
+            completed: () => {
+              setMessages(prev =>
+                prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, content: msg.content || "Workflow completed." }
+                    : msg
+                )
+              );
+            },
+          },
+          onClose: () => {
+            finishSession();
+            setIsLoading(false);
+            setCurrentExecutionId(null);
+            abortControllerRef.current = null;
+          },
+          onError: (err) => {
+            if (err?.name === "AbortError") {
+              setMessages(prev =>
+                prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, content: msg.content || "[Stopped]" }
+                    : msg
+                )
               );
             } else {
-              setMessages((prev) =>
-                prev.map((msg) =>
+              console.error("Chat SSE error:", err);
+              setMessages(prev =>
+                prev.map(msg =>
                   msg.id === assistantMessageId
-                    ? { ...msg, content: msg.content + content }
+                    ? { ...msg, content: `Error: ${err?.message || "Unknown error"}` }
                     : msg
                 )
               );
             }
-          } else if (event.event === "workflow_completed") {
-            setMessages((prev) =>
-              prev.map((msg) =>
-                msg.id === assistantMessageId
-                  ? { ...msg, content: msg.content || "Workflow completed." }
-                  : msg
-              )
-            );
-          }
-        }
-      }
-      
-      setCollapsedThinking(prev => new Set(prev).add(assistantMessageId));
-      
-      // Reload sessions to update the order
-      const updatedSessions = await workflowApi.listChatSessions(workflowId);
-      setSessions(updatedSessions || []);
+            setIsLoading(false);
+            setCurrentExecutionId(null);
+            abortControllerRef.current = null;
+          },
+        },
+        { endpoint: `/api/chat/${executionId}/stream`, signal: abortController.signal }
+      );
+
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         setMessages((prev) =>
@@ -383,7 +353,6 @@ export default function ChatPage() {
           )
         );
       }
-    } finally {
       setIsLoading(false);
       setCurrentExecutionId(null);
       abortControllerRef.current = null;
@@ -463,6 +432,18 @@ export default function ChatPage() {
 
               <div className="h-5 w-px bg-workflow-border shrink-0" />
 
+              <button
+                type="button"
+                onClick={() => router.push(`/workflows/${workflowId}`)}
+                title="To workflow editor"
+                className="flex items-center gap-1.5 text-workflow-text-muted hover:text-workflow-text transition-colors duration-200 shrink-0"
+              >
+                <Edit className="w-4 h-4" />
+                <span className="font-mono text-xs">Editor</span>
+              </button>
+
+              <div className="h-5 w-px bg-workflow-border shrink-0" />
+
               <div className="flex items-center gap-2 shrink-0">
                 <Workflow className="w-4 h-4 text-workflow-text-muted" />
                 <span className="text-workflow-text font-mono text-sm font-medium truncate max-w-48">
@@ -473,17 +454,6 @@ export default function ChatPage() {
               <div className="h-5 w-px bg-workflow-border shrink-0" />
 
               <div className="flex items-center gap-2">
-                <div className="flex items-center bg-workflow-surface border border-workflow-border rounded-lg overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => router.push(`/workflows/${workflowId}`)}
-                    title="Switch to workflow editor"
-                    className="p-2.5 text-workflow-text-muted hover:text-workflow-text hover:bg-workflow-surface-hover transition-colors"
-                  >
-                    <Workflow className="w-4 h-4" />
-                  </button>
-                </div>
-
                 <div className="flex items-center bg-workflow-surface border border-workflow-border rounded-lg overflow-hidden">
                   <button
                     type="button"
@@ -537,25 +507,45 @@ export default function ChatPage() {
                   <>
                     {message.thinking && message.thinking.length > 0 && (
                       <div className="space-y-1">
+                        {/* Thinking 折叠按钮 */}
                         <button
-                          onClick={() => toggleThinking(message.id)}
-                          className="flex items-center gap-2 text-xs text-workflow-text-muted hover:text-workflow-text transition-colors"
+                          onClick={() => {
+                            toggleThinking(message.id);
+                            setTimeout(scrollToBottom, 320);
+                          }}
+                          className="flex items-center gap-2 text-xs text-workflow-text-muted hover:text-workflow-text transition-colors group"
                         >
-                          {collapsedThinking.has(message.id) ? (
-                            <ChevronRight className="w-3 h-3" />
-                          ) : (
-                            <ChevronDown className="w-3 h-3" />
-                          )}
-                          <Brain className="w-3 h-3" />
-                          <span>Thinking ({message.thinking.length} steps)</span>
+                          <ChevronRight className={cn(
+                            "w-3 h-3 transition-transform duration-200",
+                            !collapsedThinking.has(message.id) && "rotate-90"
+                          )} />
+                          <Brain className={cn(
+                            "w-3 h-3",
+                            isLoading && collapsedThinking.has(message.id) && "animate-pulse text-primary"
+                          )} />
+                          <span>
+                            {isLoading && collapsedThinking.has(message.id)
+                              ? `Thinking... (${message.thinking.length} steps)`
+                              : `Thinking (${message.thinking.length} steps)`}
+                          </span>
                         </button>
-                        
-                        <div className={cn(
-                          "ml-5 space-y-2 overflow-hidden transition-all",
-                          collapsedThinking.has(message.id) ? "max-h-0" : "max-h-[2000px]"
-                        )}>
+
+                        {/* Thinking 展开内容（默认折叠，展开带动画） */}
+                        <div
+                          className={cn(
+                            "ml-5 space-y-2 overflow-hidden",
+                            "transition-all duration-300 ease-in-out",
+                            collapsedThinking.has(message.id)
+                              ? "max-h-0 opacity-0"
+                              : "max-h-[2000px] opacity-100"
+                          )}
+                        >
                           {message.thinking.map((step, idx) => (
-                            <div key={step.nodeId || idx} className="rounded-lg px-3 py-2 bg-workflow-surface border border-workflow-border">
+                            <div
+                              key={step.nodeId || idx}
+                              className="rounded-lg px-3 py-2 bg-workflow-surface border border-workflow-border"
+                              style={{ animationDelay: `${idx * 30}ms` }}
+                            >
                               <div className="flex items-center justify-between text-xs text-workflow-text-muted mb-1">
                                 <div className="flex items-center gap-2">
                                   <Brain className="w-3 h-3" />
